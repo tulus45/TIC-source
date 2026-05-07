@@ -220,7 +220,7 @@ internal fun RegistrationCameraScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text(
-                        text = "Hasil foto akan disimpan lokal di folder aplikasi dan langsung dipakai untuk registrasi.",
+                        text = "Hasil foto akan disimpan lokal di folder aplikasi dan dioptimalkan otomatis sebelum upload agar ukuran file tetap hemat.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
                     )

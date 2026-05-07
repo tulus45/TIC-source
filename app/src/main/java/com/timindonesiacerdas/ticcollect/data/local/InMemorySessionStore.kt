@@ -20,6 +20,7 @@ import com.timindonesiacerdas.ticcollect.data.model.SubmissionStatus
 import com.timindonesiacerdas.ticcollect.data.model.UserProfile
 import com.timindonesiacerdas.ticcollect.data.remote.RegistrationUploadResponse
 import com.timindonesiacerdas.ticcollect.data.remote.TicBackendHttpClient
+import com.timindonesiacerdas.ticcollect.utils.ImageUploadOptimizer
 import com.timindonesiacerdas.ticcollect.utils.TicConstants
 import com.timindonesiacerdas.ticcollect.utils.TimeFormatter
 import kotlinx.coroutines.CoroutineScope
@@ -47,6 +48,7 @@ object InMemorySessionStore {
     @Volatile
     private var initialized = false
 
+    private lateinit var application: Application
     private lateinit var sessionDao: SessionDao
     private lateinit var registrationDraftDao: RegistrationDraftDao
 
@@ -62,6 +64,7 @@ object InMemorySessionStore {
                 databaseName,
             ).fallbackToDestructiveMigration().build()
 
+            this.application = application
             sessionDao = database.sessionDao()
             registrationDraftDao = database.registrationDraftDao()
             initialized = true
@@ -106,17 +109,28 @@ object InMemorySessionStore {
     suspend fun submitRegistrationToBackend(draft: RegistrationDraft): RegistrationUploadResponse {
         ensureInitialized()
 
+        val optimizedKtp = ImageUploadOptimizer.prepareForUpload(
+            context = application,
+            filePath = draft.ktpLocalPath,
+            uploadLabel = "KTP",
+        )
+        val optimizedSelfie = ImageUploadOptimizer.prepareForUpload(
+            context = application,
+            filePath = draft.selfieLocalPath,
+            uploadLabel = "selfie",
+        )
+
         val ktpUpload = TicBackendHttpClient.uploadRegistrationAsset(
             uid = draft.uid,
             gmail = draft.gmail,
             assetType = "ktp",
-            filePath = draft.ktpLocalPath,
+            filePath = optimizedKtp.file.absolutePath,
         )
         val selfieUpload = TicBackendHttpClient.uploadRegistrationAsset(
             uid = draft.uid,
             gmail = draft.gmail,
             assetType = "selfie",
-            filePath = draft.selfieLocalPath,
+            filePath = optimizedSelfie.file.absolutePath,
         )
         val draftWithUploadRefs = draft.copy(
             ktpDriveFileId = ktpUpload.fileUrl,
