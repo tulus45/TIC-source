@@ -1,6 +1,8 @@
 package com.timindonesiacerdas.ticcollect.data.local
 
 import android.app.Application
+import org.json.JSONArray
+import org.json.JSONObject
 import androidx.room.Room
 import com.timindonesiacerdas.ticcollect.data.local.db.RegistrationDraftDao
 import com.timindonesiacerdas.ticcollect.data.local.db.SessionDao
@@ -15,13 +17,13 @@ import com.timindonesiacerdas.ticcollect.data.model.LocalRegistrationDraft
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationDraft
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
 import com.timindonesiacerdas.ticcollect.data.model.SessionState
+import com.timindonesiacerdas.ticcollect.data.model.SubmissionFileType
 import com.timindonesiacerdas.ticcollect.data.model.SubmissionRecord
 import com.timindonesiacerdas.ticcollect.data.model.SubmissionStatus
 import com.timindonesiacerdas.ticcollect.data.model.UserProfile
 import com.timindonesiacerdas.ticcollect.data.remote.RegistrationUploadResponse
 import com.timindonesiacerdas.ticcollect.data.remote.TicBackendHttpClient
 import com.timindonesiacerdas.ticcollect.utils.ImageUploadOptimizer
-import com.timindonesiacerdas.ticcollect.utils.TicConstants
 import com.timindonesiacerdas.ticcollect.utils.TimeFormatter
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
@@ -38,6 +40,7 @@ object InMemorySessionStore {
     private const val preferencesName = "tic_collect_prefs"
     private const val installationUidKey = "installation_uid"
     private const val legacyDemoUidKey = "demo_uid"
+    private const val submissionsStorageKey = "submissions_json"
 
     private val storeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _session = MutableStateFlow(SessionState())
@@ -76,6 +79,7 @@ object InMemorySessionStore {
                 isAuthenticated = true,
                 user = buildLocalIdentity(),
             )
+            _submissions.value = loadStoredSubmissions()
             bindPersistentFlows()
             ensureLocalIdentity()
         }
@@ -258,31 +262,53 @@ object InMemorySessionStore {
         ensureInitialized()
         storeScope.launch {
             sessionDao.clear()
-            _submissions.value = emptyList()
         }
     }
 
-    fun seedDemoPendingSubmissionIfEmpty() {
-        val currentUser = _session.value.user ?: return
-        if (_submissions.value.isNotEmpty()) return
+    fun enqueueSubmission(record: SubmissionRecord) {
+        ensureInitialized()
+        val updatedItems = listOf(record) + _submissions.value.filterNot { it.submissionId == record.submissionId }
+        val sortedItems = updatedItems.sortedByDescending { it.createdAt }
+        _submissions.value = sortedItems
+        persistSubmissions(sortedItems)
+    }
 
-        _submissions.value = listOf(
-            SubmissionRecord(
-                submissionId = "sub-demo-001",
-                uid = currentUser.uid,
-                gmail = currentUser.gmail,
-                projectName = TicConstants.defaultProjectName,
-                formName = TicConstants.defaultFormName,
-                answersJson = """{"q1":"Ya","q2":"Responden Demo"}""",
-                gpsLat = -6.200000,
-                gpsLng = 106.816666,
-                gpsAccuracy = 12.5f,
-                driveFolderId = null,
-                status = SubmissionStatus.COMPLETED_PENDING_UPLOAD,
-                createdAt = TimeFormatter.nowStorage(),
-                uploadedAt = null,
-            ),
-        )
+    fun uploadSubmission(submissionId: String) {
+        ensureInitialized()
+        if (submissionId.isBlank()) return
+
+        val currentItems = _submissions.value
+        val target = currentItems.firstOrNull { it.submissionId == submissionId } ?: return
+        val uploadingRecord = target.copy(status = SubmissionStatus.UPLOADING)
+        replaceSubmission(uploadingRecord)
+
+        storeScope.launch {
+            runCatching {
+                TicBackendHttpClient.submitSubmission(
+                    prepareSubmissionForUpload(uploadingRecord),
+                )
+            }.onSuccess { response ->
+                val updatedRecord = uploadingRecord.copy(
+                    status = SubmissionStatus.UPLOADED,
+                    driveFolderId = response.driveFolderId,
+                    uploadedAt = response.uploadedAt ?: TimeFormatter.nowStorage(),
+                )
+                replaceSubmission(updatedRecord)
+            }.onFailure {
+                replaceSubmission(
+                    uploadingRecord.copy(
+                        status = SubmissionStatus.FAILED_UPLOAD,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun uploadAllSubmissions() {
+        ensureInitialized()
+        _submissions.value
+            .filter { it.status != SubmissionStatus.UPLOADED && it.status != SubmissionStatus.UPLOADING }
+            .forEach { uploadSubmission(it.submissionId) }
     }
 
     private fun bindPersistentFlows() {
@@ -293,7 +319,6 @@ object InMemorySessionStore {
                 if (sessionEntity == null || user == null) {
                     _session.value = buildFallbackSessionState()
                     _currentRegistrationDraft.value = null
-                    _submissions.value = emptyList()
                     ensureLocalIdentity()
                     return@collectLatest
                 }
@@ -306,12 +331,6 @@ object InMemorySessionStore {
                         user = user,
                         profile = draftEntity?.toUserProfile(),
                     )
-
-                    if (localDraft?.status == RegistrationStatus.APPROVED) {
-                        seedDemoPendingSubmissionIfEmpty()
-                    } else {
-                        _submissions.value = emptyList()
-                    }
                 }
             }
         }
@@ -329,4 +348,125 @@ object InMemorySessionStore {
     ): RegistrationStatus = runCatching {
         RegistrationStatus.valueOf(value.trim().uppercase())
     }.getOrDefault(default)
+
+    private fun replaceSubmission(record: SubmissionRecord) {
+        val updatedItems = _submissions.value
+            .filterNot { it.submissionId == record.submissionId } + record
+        val sortedItems = updatedItems.sortedByDescending { it.createdAt }
+        _submissions.value = sortedItems
+        persistSubmissions(sortedItems)
+    }
+
+    private fun prepareSubmissionForUpload(record: SubmissionRecord): SubmissionRecord {
+        val preparedFiles = record.files.map { file ->
+            if (file.fileType != SubmissionFileType.PHOTO) {
+                file
+            } else {
+                val optimized = ImageUploadOptimizer.prepareForUpload(
+                    context = application,
+                    filePath = file.localPath,
+                    uploadLabel = file.filename.ifBlank { "foto evidence" },
+                )
+                file.copy(
+                    localPath = optimized.file.absolutePath,
+                    filename = optimized.file.name,
+                )
+            }
+        }
+
+        return record.copy(files = preparedFiles)
+    }
+
+    private fun loadStoredSubmissions(): List<SubmissionRecord> {
+        val preferences = application.getSharedPreferences(preferencesName, Application.MODE_PRIVATE)
+        val raw = preferences.getString(submissionsStorageKey, null).orEmpty()
+        if (raw.isBlank()) return emptyList()
+
+        return runCatching {
+            val array = JSONArray(raw)
+            buildList(array.length()) {
+                for (index in 0 until array.length()) {
+                    val item = array.optJSONObject(index) ?: continue
+                    add(item.toSubmissionRecord())
+                }
+            }.sortedByDescending { it.createdAt }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun persistSubmissions(items: List<SubmissionRecord>) {
+        val preferences = application.getSharedPreferences(preferencesName, Application.MODE_PRIVATE)
+        val payload = JSONArray().apply {
+            items.forEach { put(it.toJson()) }
+        }
+        preferences.edit().putString(submissionsStorageKey, payload.toString()).apply()
+    }
+
+    private fun SubmissionRecord.toJson(): JSONObject = JSONObject().apply {
+        put("submissionId", submissionId)
+        put("uid", uid)
+        put("gmail", gmail)
+        put("projectName", projectName)
+        put("formName", formName)
+        put("answersJson", answersJson)
+        put("gpsLat", gpsLat)
+        put("gpsLng", gpsLng)
+        put("gpsAccuracy", gpsAccuracy)
+        put("driveFolderId", driveFolderId)
+        put("status", status.name)
+        put("createdAt", createdAt)
+        put("uploadedAt", uploadedAt)
+        put(
+            "files",
+            JSONArray().apply {
+                files.forEach { file ->
+                    put(
+                        JSONObject().apply {
+                            put("id", file.id)
+                            put("submissionId", file.submissionId)
+                            put("fileType", file.fileType.name)
+                            put("localPath", file.localPath)
+                            put("driveFileId", file.driveFileId)
+                            put("filename", file.filename)
+                            put("createdAt", file.createdAt)
+                        },
+                    )
+                }
+            },
+        )
+    }
+
+    private fun JSONObject.toSubmissionRecord(): SubmissionRecord = SubmissionRecord(
+        submissionId = optString("submissionId"),
+        uid = optString("uid"),
+        gmail = optString("gmail"),
+        projectName = optString("projectName"),
+        formName = optString("formName"),
+        answersJson = optString("answersJson"),
+        gpsLat = if (has("gpsLat") && !isNull("gpsLat")) optDouble("gpsLat") else null,
+        gpsLng = if (has("gpsLng") && !isNull("gpsLng")) optDouble("gpsLng") else null,
+        gpsAccuracy = if (has("gpsAccuracy") && !isNull("gpsAccuracy")) optDouble("gpsAccuracy").toFloat() else null,
+        driveFolderId = optString("driveFolderId").ifBlank { null },
+        status = runCatching { SubmissionStatus.valueOf(optString("status")) }.getOrDefault(SubmissionStatus.DRAFT),
+        createdAt = optString("createdAt"),
+        uploadedAt = optString("uploadedAt").ifBlank { null },
+        files = buildList {
+            val fileArray = optJSONArray("files") ?: return@buildList
+            for (index in 0 until fileArray.length()) {
+                val file = fileArray.optJSONObject(index) ?: continue
+                add(
+                    com.timindonesiacerdas.ticcollect.data.model.SubmissionFile(
+                        id = file.optString("id"),
+                        submissionId = file.optString("submissionId"),
+                        fileType = runCatching {
+                            com.timindonesiacerdas.ticcollect.data.model.SubmissionFileType.valueOf(file.optString("fileType"))
+                        }.getOrDefault(com.timindonesiacerdas.ticcollect.data.model.SubmissionFileType.PHOTO),
+                        localPath = file.optString("localPath"),
+                        driveFileId = file.optString("driveFileId").ifBlank { null },
+                        filename = file.optString("filename"),
+                        createdAt = file.optString("createdAt"),
+                    ),
+                )
+            }
+        },
+    )
 }

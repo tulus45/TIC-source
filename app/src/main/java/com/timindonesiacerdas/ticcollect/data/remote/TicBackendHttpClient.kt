@@ -2,16 +2,18 @@ package com.timindonesiacerdas.ticcollect.data.remote
 
 import android.util.Base64
 import com.timindonesiacerdas.ticcollect.BuildConfig
+import com.timindonesiacerdas.ticcollect.data.local.InMemorySessionStore
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationDraft
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
 import com.timindonesiacerdas.ticcollect.data.model.SubmissionRecord
+import com.timindonesiacerdas.ticcollect.data.model.SubmissionStatus
 import com.timindonesiacerdas.ticcollect.data.model.UserProfile
+import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLEncoder
-import java.io.File
 import java.net.UnknownHostException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -186,11 +188,100 @@ object TicBackendHttpClient : TicBackendApiContract {
     }
 
     override suspend fun submitSubmission(record: SubmissionRecord): SubmissionUploadResponse {
-        throw TicBackendException("Upload submission belum diimplementasikan pada backend lokal ini.")
+        val preparedFiles = withContext(Dispatchers.IO) {
+            record.files.map { file ->
+                val sourceFile = File(file.localPath)
+                if (!sourceFile.exists()) {
+                    throw TicBackendException("File evidence ${file.filename} tidak ditemukan di device.")
+                }
+
+                JSONObject().apply {
+                    put("id", file.id)
+                    put("submissionId", file.submissionId)
+                    put("fileType", file.fileType.name)
+                    put("localPath", file.localPath)
+                    put("driveFileId", file.driveFileId)
+                    put("filename", file.filename)
+                    put("createdAt", file.createdAt)
+                    put("mimeType", guessMimeType(sourceFile))
+                    put(
+                        "base64Data",
+                        Base64.encodeToString(sourceFile.readBytes(), Base64.NO_WRAP),
+                    )
+                }
+            }
+        }
+
+        val payload = requestJson(
+            method = "POST",
+            path = TicApiRoutes.submissions,
+            body = JSONObject().apply {
+                put("submissionId", record.submissionId)
+                put("uid", record.uid)
+                put("gmail", record.gmail)
+                put("projectName", record.projectName)
+                put("formName", record.formName)
+                put("answersJson", record.answersJson)
+                put("gpsLat", record.gpsLat)
+                put("gpsLng", record.gpsLng)
+                put("gpsAccuracy", record.gpsAccuracy)
+                put("driveFolderId", record.driveFolderId)
+                put("status", record.status.name)
+                put("createdAt", record.createdAt)
+                put("uploadedAt", record.uploadedAt)
+                put(
+                    "files",
+                    org.json.JSONArray().apply {
+                        preparedFiles.forEach(::put)
+                    },
+                )
+            },
+        )
+
+        return SubmissionUploadResponse(
+            submissionId = payload.optString("submissionId"),
+            driveFolderId = payload.optStringOrNull("driveFolderId"),
+            driveFileIds = payload.optStringList("driveFileIds"),
+            uploadStatus = payload.optString("uploadStatus"),
+            uploadedAt = payload.optStringOrNull("uploadedAt"),
+        )
     }
 
     override suspend fun getMySubmissions(): List<SubmissionRecord> {
-        throw TicBackendException("Endpoint submission belum diimplementasikan pada backend lokal ini.")
+        val currentUser = InMemorySessionStore.session.value.user
+            ?: throw TicBackendException("Identitas perangkat belum tersedia.")
+
+        val payload = requestJsonArray(
+            method = "GET",
+            path = TicApiRoutes.mySubmissions,
+            query = buildQuery(currentUser.uid, currentUser.gmail, null),
+        )
+
+        return buildList(payload.length()) {
+            for (index in 0 until payload.length()) {
+                val item = payload.optJSONObject(index) ?: continue
+                add(
+                    SubmissionRecord(
+                        submissionId = item.optString("submissionId"),
+                        uid = item.optString("uid"),
+                        gmail = item.optString("gmail"),
+                        projectName = item.optString("projectName"),
+                        formName = item.optString("formName"),
+                        answersJson = item.optString("answersJson"),
+                        gpsLat = if (item.has("gpsLat") && !item.isNull("gpsLat")) item.optDouble("gpsLat") else null,
+                        gpsLng = if (item.has("gpsLng") && !item.isNull("gpsLng")) item.optDouble("gpsLng") else null,
+                        gpsAccuracy = if (item.has("gpsAccuracy") && !item.isNull("gpsAccuracy")) item.optDouble("gpsAccuracy").toFloat() else null,
+                        driveFolderId = item.optStringOrNull("driveFolderId"),
+                        status = runCatching {
+                            SubmissionStatus.valueOf(item.optString("status").trim().uppercase())
+                        }.getOrDefault(SubmissionStatus.DRAFT),
+                        createdAt = item.optString("createdAt"),
+                        uploadedAt = item.optStringOrNull("uploadedAt"),
+                        files = emptyList(),
+                    ),
+                )
+            }
+        }
     }
 
     private suspend fun requestJson(
@@ -214,6 +305,45 @@ object TicBackendHttpClient : TicBackendApiContract {
                     path = path,
                     query = query,
                     body = body,
+                )
+                activeBaseUrl = baseUrl
+                return@withContext payload
+            } catch (error: IOException) {
+                when (error) {
+                    is TicBackendNotFoundException -> throw error
+                    is TicBackendException -> throw error
+                    is UnknownHostException,
+                    is SocketTimeoutException -> lastConnectionError = error
+                    else -> lastConnectionError = error
+                }
+            }
+        }
+
+        throw TicBackendException(
+            message = "Tidak bisa terhubung ke server registrasi. Alamat yang dicoba: ${prioritizedBaseUrls.joinToString()}. Pastikan backend online aktif, atau override `ticBackendBaseUrl` saat build kalau Anda sedang testing ke server lokal.",
+            cause = lastConnectionError,
+        )
+    }
+
+    private suspend fun requestJsonArray(
+        method: String,
+        path: String,
+        query: Map<String, String> = emptyMap(),
+    ): org.json.JSONArray = withContext(Dispatchers.IO) {
+        val prioritizedBaseUrls = buildList {
+            add(activeBaseUrl)
+            addAll(candidateBaseUrls.filterNot { it == activeBaseUrl })
+        }
+
+        var lastConnectionError: IOException? = null
+
+        for (baseUrl in prioritizedBaseUrls) {
+            try {
+                val payload = requestJsonArrayOnce(
+                    baseUrl = baseUrl,
+                    method = method,
+                    path = path,
+                    query = query,
                 )
                 activeBaseUrl = baseUrl
                 return@withContext payload
@@ -292,6 +422,43 @@ object TicBackendHttpClient : TicBackendApiContract {
             }
 
             return payload
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun requestJsonArrayOnce(
+        baseUrl: String,
+        method: String,
+        path: String,
+        query: Map<String, String>,
+    ): org.json.JSONArray {
+        val requestUrl = buildUrl(baseUrl, path, query)
+        val connection = (URL(requestUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = method
+            connectTimeout = connectTimeoutMillis
+            readTimeout = readTimeoutMillis
+            doInput = true
+            setRequestProperty("Accept", "application/json")
+        }
+
+        try {
+            val statusCode = connection.responseCode
+            val stream = if (statusCode in 200..299) connection.inputStream else connection.errorStream
+            val rawBody = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+
+            if (statusCode !in 200..299) {
+                val payload = if (rawBody.isBlank()) JSONObject() else JSONObject(rawBody)
+                val message = payload.optString("error").ifBlank {
+                    "Server registrasi mengembalikan kode $statusCode."
+                }
+                if (statusCode == 404) {
+                    throw TicBackendNotFoundException(message)
+                }
+                throw TicBackendException(message)
+            }
+
+            return if (rawBody.isBlank()) org.json.JSONArray() else org.json.JSONArray(rawBody)
         } finally {
             connection.disconnect()
         }

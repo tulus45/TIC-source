@@ -8,12 +8,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.timindonesiacerdas.ticcollect.auth.*
-import com.timindonesiacerdas.ticcollect.camera.*
+import com.timindonesiacerdas.ticcollect.camera.KtpCameraScreen
+import com.timindonesiacerdas.ticcollect.camera.SelfieCameraScreen
+import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
+import com.timindonesiacerdas.ticcollect.form.EvidenceWorkflowScreen
 import com.timindonesiacerdas.ticcollect.form.FormScreen
 import com.timindonesiacerdas.ticcollect.form.FormViewModel
 import com.timindonesiacerdas.ticcollect.home.*
-import com.timindonesiacerdas.ticcollect.location.GpsCaptureScreen
 import com.timindonesiacerdas.ticcollect.registration.*
+import com.timindonesiacerdas.ticcollect.splash.SplashScreen
 import com.timindonesiacerdas.ticcollect.upload.*
 
 @Composable
@@ -33,8 +36,20 @@ fun TicNavGraph(
 
     NavHost(
         navController = navController,
-        startDestination = TicRoutes.Welcome,
+        startDestination = TicRoutes.Splash,
     ) {
+        composable(TicRoutes.Splash) {
+            LaunchedEffect(authUiState.isBootstrapping, authUiState.session.profile?.status) {
+                if (!authUiState.isBootstrapping) {
+                    navController.navigateClearingBackStack(
+                        AuthViewModel.destinationFor(authUiState.session),
+                    )
+                }
+            }
+
+            SplashScreen()
+        }
+
         composable(TicRoutes.Welcome) {
             LaunchedEffect(authUiState.session.profile?.status) {
                 val destination = AuthViewModel.destinationFor(authUiState.session)
@@ -61,6 +76,9 @@ fun TicNavGraph(
                     }
                     com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.REJECTED -> {
                         navController.navigateClearingBackStack(TicRoutes.Rejected)
+                    }
+                    com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.SUSPENDED -> {
+                        navController.navigateClearingBackStack(TicRoutes.Suspended)
                     }
                     else -> Unit
                 }
@@ -121,6 +139,9 @@ fun TicNavGraph(
                     com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.REJECTED -> {
                         navController.navigateClearingBackStack(TicRoutes.Rejected)
                     }
+                    com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.SUSPENDED -> {
+                        navController.navigateClearingBackStack(TicRoutes.Suspended)
+                    }
                     else -> Unit
                 }
             }
@@ -142,7 +163,21 @@ fun TicNavGraph(
             )
         }
 
+        composable(TicRoutes.Suspended) {
+            SuspendedScreen(
+                suspensionReason = registrationUiState.rejectionReason,
+                onBackToWelcome = {
+                    navController.navigateClearingBackStack(TicRoutes.Welcome)
+                },
+            )
+        }
+
         composable(TicRoutes.Home) {
+            ProtectedRouteGuard(
+                navController = navController,
+                status = authUiState.session.profile?.status,
+                onRefreshStatus = authViewModel::refreshAccessStatus,
+            )
             HomeScreen(
                 uiState = homeUiState,
                 onStartDataCollection = { navController.navigate(TicRoutes.Form) },
@@ -153,51 +188,76 @@ fun TicNavGraph(
         }
 
         composable(TicRoutes.Form) {
+            ProtectedRouteGuard(
+                navController = navController,
+                status = authUiState.session.profile?.status,
+                onRefreshStatus = authViewModel::refreshAccessStatus,
+            )
             FormScreen(
                 uiState = formUiState,
                 onBack = { navController.popBackStack() },
-                onPhotoCapture = { navController.navigate(TicRoutes.PhotoCapture) },
-                onVideoCapture = { navController.navigate(TicRoutes.VideoCapture) },
-                onGpsCapture = { navController.navigate(TicRoutes.GpsCapture) },
+                onNext = {
+                    formViewModel.resetEvidenceProgress()
+                    navController.navigate(TicRoutes.EvidenceWorkflow)
+                },
                 onRetryLoadMasterData = { formViewModel.loadMasterData(force = true) },
                 onSelectValue = formViewModel::selectValue,
                 onClearSelections = formViewModel::clearSelections,
             )
         }
 
-        composable(TicRoutes.PhotoCapture) {
-            PhotoCaptureScreen(
-                onBack = { navController.popBackStack() },
+        composable(TicRoutes.EvidenceWorkflow) {
+            ProtectedRouteGuard(
+                navController = navController,
+                status = authUiState.session.profile?.status,
+                onRefreshStatus = authViewModel::refreshAccessStatus,
             )
-        }
-
-        composable(TicRoutes.VideoCapture) {
-            VideoCaptureScreen(
+            EvidenceWorkflowScreen(
+                uiState = formUiState,
                 onBack = { navController.popBackStack() },
-            )
-        }
-
-        composable(TicRoutes.GpsCapture) {
-            GpsCaptureScreen(
-                onBack = { navController.popBackStack() },
+                onPreviousStep = formViewModel::goToPreviousEvidenceStep,
+                onNextStep = formViewModel::goToNextEvidenceStep,
+                onFinish = {
+                    formViewModel.completeSubmission()
+                    navController.navigateClearingBackStack(TicRoutes.PendingUpload)
+                },
+                onPhotoRecorded = formViewModel::recordPhotoCapture,
+                onPhotoCleared = formViewModel::clearPhotoCapture,
+                onGpsRecorded = formViewModel::recordGpsCapture,
             )
         }
 
         composable(TicRoutes.PendingUpload) {
+            ProtectedRouteGuard(
+                navController = navController,
+                status = authUiState.session.profile?.status,
+                onRefreshStatus = authViewModel::refreshAccessStatus,
+            )
             PendingUploadScreen(
                 uiState = pendingUploadUiState,
                 onBack = { navController.popBackStack() },
                 onRetry = uploadViewModel::retryUpload,
+                onUploadAll = uploadViewModel::uploadAll,
             )
         }
 
         composable(TicRoutes.SubmissionHistory) {
+            ProtectedRouteGuard(
+                navController = navController,
+                status = authUiState.session.profile?.status,
+                onRefreshStatus = authViewModel::refreshAccessStatus,
+            )
             SubmissionHistoryScreen(
                 onBack = { navController.popBackStack() },
             )
         }
 
         composable(TicRoutes.Profile) {
+            ProtectedRouteGuard(
+                navController = navController,
+                status = authUiState.session.profile?.status,
+                onRefreshStatus = authViewModel::refreshAccessStatus,
+            )
             ProfileScreen(
                 uiState = homeUiState,
                 onBack = { navController.popBackStack() },
@@ -212,5 +272,34 @@ private fun NavHostController.navigateClearingBackStack(route: String) {
             inclusive = true
         }
         launchSingleTop = true
+    }
+}
+
+@Composable
+private fun ProtectedRouteGuard(
+    navController: NavHostController,
+    status: RegistrationStatus?,
+    onRefreshStatus: () -> Unit,
+) {
+    LaunchedEffect(Unit) {
+        onRefreshStatus()
+    }
+
+    LaunchedEffect(status) {
+        when (status ?: RegistrationStatus.NOT_REGISTERED) {
+            RegistrationStatus.APPROVED -> Unit
+            RegistrationStatus.NOT_REGISTERED -> {
+                navController.navigateClearingBackStack(TicRoutes.Welcome)
+            }
+            RegistrationStatus.PENDING -> {
+                navController.navigateClearingBackStack(TicRoutes.WaitingApproval)
+            }
+            RegistrationStatus.REJECTED -> {
+                navController.navigateClearingBackStack(TicRoutes.Rejected)
+            }
+            RegistrationStatus.SUSPENDED -> {
+                navController.navigateClearingBackStack(TicRoutes.Suspended)
+            }
+        }
     }
 }

@@ -424,6 +424,52 @@ body {
   background: rgba(180, 35, 24, 0.12);
 }
 
+.status-pill[data-status="SUSPENDED"] {
+  color: var(--danger);
+  background: rgba(180, 35, 24, 0.18);
+}
+
+.status-pill[data-status="UPLOADED"] {
+  color: var(--success);
+  background: rgba(35, 122, 87, 0.12);
+}
+
+.status-pill[data-status="UPLOADING"] {
+  color: var(--primary);
+  background: rgba(13, 94, 166, 0.12);
+}
+
+.status-pill[data-status="FAILED_UPLOAD"] {
+  color: var(--danger);
+  background: rgba(180, 35, 24, 0.12);
+}
+
+.status-pill[data-status="COMPLETED_PENDING_UPLOAD"] {
+  color: var(--warning);
+  background: rgba(181, 71, 8, 0.12);
+}
+
+.submission-files {
+  display: grid;
+  gap: 8px;
+}
+
+.submission-file-link {
+  color: var(--primary);
+  text-decoration: none;
+  word-break: break-word;
+}
+
+.submission-file-link:hover {
+  text-decoration: underline;
+}
+
+.submission-file-link--muted {
+  color: var(--muted);
+  cursor: default;
+  pointer-events: none;
+}
+
 .button {
   appearance: none;
   border: none;
@@ -472,6 +518,11 @@ body {
 
 .button--reject {
   background: rgba(180, 35, 24, 0.12);
+  color: var(--danger);
+}
+
+.button--suspend {
+  background: rgba(180, 35, 24, 0.18);
   color: var(--danger);
 }
 

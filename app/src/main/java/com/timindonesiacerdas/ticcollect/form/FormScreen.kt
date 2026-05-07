@@ -27,33 +27,27 @@ import com.timindonesiacerdas.ticcollect.ui.components.TicSecondaryButton
 fun FormScreen(
     uiState: FormUiState,
     onBack: () -> Unit,
-    onPhotoCapture: () -> Unit,
-    onVideoCapture: () -> Unit,
-    onGpsCapture: () -> Unit,
+    onNext: () -> Unit,
     onRetryLoadMasterData: () -> Unit,
     onSelectValue: (Int, String) -> Unit,
     onClearSelections: () -> Unit,
 ) {
     val masterData = uiState.masterData
-    val selectedPath = buildSelectedPath(
-        columns = masterData?.columns.orEmpty(),
-        values = uiState.selectedValues,
-    )
     val isSelectionComplete = masterData != null &&
         uiState.selectedValues.size >= masterData.columns.size &&
         uiState.selectedValues.take(masterData.columns.size).all { it.isNotBlank() }
 
     TicScreenContainer(
         title = "Data Collection",
-        subtitle = "Pilih lokasi kerja terlebih dahulu. Struktur level mengikuti master data backend dan bisa berubah tanpa perlu hardcode ulang di aplikasi.",
+        subtitle = "",
         onBack = onBack,
     ) {
         TicSectionCard(
-            title = masterData?.title ?: "Pilih Lokasi Sekolah",
+            title = "Pilih Sekolah",
             subtitle = when {
                 uiState.isLoadingMasterData -> "Memuat master data lokasi dari backend..."
                 !uiState.errorMessage.isNullOrBlank() -> uiState.errorMessage
-                masterData != null -> "Level pilihan mengikuti header data. Jika nanti jumlah kolom berubah, layar ini akan ikut menyesuaikan."
+                masterData != null -> null
                 else -> "Master data sekolah belum tersedia."
             },
         ) {
@@ -94,59 +88,18 @@ fun FormScreen(
                             )
                         }
 
-                        if (selectedPath.isNotBlank()) {
-                            Text(
-                                text = "Pilihan saat ini: $selectedPath",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
-                            )
-                        }
-
-                        Text(
-                            text = "${masterData.rows.size} baris master data tersedia.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
-                        )
-
                         TicSecondaryButton(
                             text = "Reset Pilihan",
                             onClick = onClearSelections,
                             enabled = uiState.selectedValues.any { it.isNotBlank() },
                         )
+                        TicPrimaryButton(
+                            text = "Next",
+                            onClick = onNext,
+                            enabled = isSelectionComplete,
+                        )
                     }
                 }
-            }
-        }
-
-        TicSectionCard(
-            title = "Modul Evidence",
-            subtitle = if (isSelectionComplete) {
-                "Lokasi sudah dipilih. Anda bisa lanjut ke placeholder evidence sambil kita bangun flow form finalnya."
-            } else {
-                "Selesaikan pilihan lokasi sampai sekolah terlebih dahulu agar konteks pengisian jelas."
-            },
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                TicPrimaryButton(
-                    text = "Buka Placeholder Foto",
-                    onClick = onPhotoCapture,
-                    enabled = isSelectionComplete,
-                )
-                TicSecondaryButton(
-                    text = "Buka Placeholder Video",
-                    onClick = onVideoCapture,
-                    enabled = isSelectionComplete,
-                )
-                TicSecondaryButton(
-                    text = "Buka Placeholder GPS",
-                    onClick = onGpsCapture,
-                    enabled = isSelectionComplete,
-                )
-                Text(
-                    text = "Tahap berikutnya kita bisa sambungkan pilihan lokasi ini ke form one-question-per-screen dan penyimpanan jawaban.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f),
-                )
             }
         }
     }
@@ -227,14 +180,4 @@ private fun availableOptionsForLevel(
         }
     }
     return results.toList()
-}
-
-private fun buildSelectedPath(
-    columns: List<String>,
-    values: List<String>,
-): String {
-    return columns.mapIndexedNotNull { index, column ->
-        val value = values.getOrNull(index).orEmpty().trim()
-        if (value.isBlank()) null else "$column: $value"
-    }.joinToString(" > ")
 }

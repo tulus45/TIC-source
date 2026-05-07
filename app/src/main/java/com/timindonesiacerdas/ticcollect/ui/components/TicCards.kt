@@ -1,21 +1,27 @@
 package com.timindonesiacerdas.ticcollect.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
 import com.timindonesiacerdas.ticcollect.ui.theme.TicError
@@ -63,10 +69,11 @@ fun TicSectionCard(
 @Composable
 fun TicMenuCard(
     title: String,
-    description: String,
-    actionLabel: String,
     onActionClick: () -> Unit,
     modifier: Modifier = Modifier,
+    actionIcon: ImageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+    iconContainerColor: Color = TicPrimarySoft,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -76,33 +83,35 @@ fun TicMenuCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                 )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                )
             }
             Surface(
-                color = TicPrimarySoft,
+                color = iconContainerColor,
                 shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.clickable(onClick = onActionClick),
             ) {
-                TextButton(onClick = onActionClick) {
-                    Text(
-                        text = actionLabel,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        imageVector = actionIcon,
+                        contentDescription = "Buka menu $title",
+                        tint = iconTint,
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
@@ -120,6 +129,7 @@ fun TicStatusPill(
         RegistrationStatus.PENDING -> TicWarning.copy(alpha = 0.16f) to "Pending"
         RegistrationStatus.APPROVED -> TicSuccess.copy(alpha = 0.16f) to "Approved"
         RegistrationStatus.REJECTED -> TicError.copy(alpha = 0.14f) to "Rejected"
+        RegistrationStatus.SUSPENDED -> TicError.copy(alpha = 0.14f) to "Suspended"
     }
 
     val textColor = when (status) {
@@ -127,6 +137,7 @@ fun TicStatusPill(
         RegistrationStatus.PENDING -> TicWarning
         RegistrationStatus.APPROVED -> TicSuccess
         RegistrationStatus.REJECTED -> TicError
+        RegistrationStatus.SUSPENDED -> TicError
     }
 
     Surface(

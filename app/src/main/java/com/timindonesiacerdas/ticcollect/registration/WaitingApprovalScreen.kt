@@ -51,6 +51,7 @@ fun WaitingApprovalScreen(
 private fun waitingStatusLabel(status: RegistrationStatus?): String = when (status) {
     RegistrationStatus.APPROVED -> "Approved"
     RegistrationStatus.REJECTED -> "Rejected"
+    RegistrationStatus.SUSPENDED -> "Suspended"
     RegistrationStatus.PENDING -> "Pending review"
     RegistrationStatus.NOT_REGISTERED, null -> "Belum terkonfirmasi"
 }

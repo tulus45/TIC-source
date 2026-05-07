@@ -18,7 +18,7 @@ class UploadViewModel : ViewModel() {
     val uiState: StateFlow<PendingUploadUiState> = InMemorySessionStore.submissions
         .map { items ->
             PendingUploadUiState(
-                items = items.filter { it.status != SubmissionStatus.UPLOADED },
+                items = items.sortedByDescending { it.createdAt },
             )
         }
         .stateIn(
@@ -27,8 +27,24 @@ class UploadViewModel : ViewModel() {
             initialValue = PendingUploadUiState(),
         )
 
-    // TODO(stage-2): enqueue WorkManager retry job and update Room statuses.
     fun retryUpload(submissionId: String) {
         if (submissionId.isBlank()) return
+        InMemorySessionStore.uploadSubmission(submissionId)
+    }
+
+    fun uploadAll() {
+        InMemorySessionStore.uploadAllSubmissions()
+    }
+
+    fun hasPendingUploads(items: List<SubmissionRecord>): Boolean {
+        return items.any { it.status != SubmissionStatus.UPLOADED && it.status != SubmissionStatus.UPLOADING }
+    }
+
+    fun statusLabel(status: SubmissionStatus): String = when (status) {
+        SubmissionStatus.DRAFT -> "Draft"
+        SubmissionStatus.COMPLETED_PENDING_UPLOAD -> "Siap diupload"
+        SubmissionStatus.UPLOADING -> "Sedang upload"
+        SubmissionStatus.UPLOADED -> "Sudah upload"
+        SubmissionStatus.FAILED_UPLOAD -> "Upload gagal"
     }
 }

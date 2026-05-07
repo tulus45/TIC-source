@@ -5,6 +5,7 @@ enum class RegistrationStatus {
     PENDING,
     APPROVED,
     REJECTED,
+    SUSPENDED,
 }
 
 data class AuthenticatedUser(

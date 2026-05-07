@@ -58,6 +58,7 @@ data class SubmissionUploadResponse(
     val driveFolderId: String? = null,
     val driveFileIds: List<String> = emptyList(),
     val uploadStatus: String,
+    val uploadedAt: String? = null,
 )
 
 interface TicBackendApiContract {

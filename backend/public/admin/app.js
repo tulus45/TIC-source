@@ -8,20 +8,32 @@ const exportButton = document.getElementById("exportButton");
 const statusFilter = document.getElementById("statusFilter");
 const detailTabButton = document.getElementById("detailTabButton");
 const summaryTabButton = document.getElementById("summaryTabButton");
+const uploadSummaryTabButton = document.getElementById("uploadSummaryTabButton");
+const uploadRawTabButton = document.getElementById("uploadRawTabButton");
 const detailPanel = document.getElementById("detailPanel");
 const summaryPanel = document.getElementById("summaryPanel");
 const summaryScroll = document.getElementById("summaryScroll");
 const summaryBody = document.getElementById("summaryBody");
 const summaryEmptyState = document.getElementById("summaryEmptyState");
+const uploadSummaryPanel = document.getElementById("uploadSummaryPanel");
+const uploadSummaryScroll = document.getElementById("uploadSummaryScroll");
+const uploadSummaryBody = document.getElementById("uploadSummaryBody");
+const uploadSummaryEmptyState = document.getElementById("uploadSummaryEmptyState");
+const uploadRawPanel = document.getElementById("uploadRawPanel");
+const uploadTableScroll = document.getElementById("uploadTableScroll");
+const uploadTableBody = document.getElementById("uploadTableBody");
+const uploadEmptyState = document.getElementById("uploadEmptyState");
 const masterFileInput = document.getElementById("masterFileInput");
 const masterUploadButton = document.getElementById("masterUploadButton");
 const masterRefreshButton = document.getElementById("masterRefreshButton");
 const masterUploadStatus = document.getElementById("masterUploadStatus");
 const masterDataInfo = document.getElementById("masterDataInfo");
 const template = document.getElementById("rowTemplate");
+const uploadTemplate = document.getElementById("uploadRowTemplate");
 let currentItems = [];
 let summaryItems = [];
-let activeTab = "summary";
+let uploadItems = [];
+let activeTab = "summary-registrations";
 let currentMasterData = null;
 
 async function loadRegistrations() {
@@ -62,6 +74,30 @@ async function loadRegistrations() {
     showError(error.message || "Terjadi kesalahan.");
   } finally {
     setLoading(false);
+    updateExportButtonState();
+  }
+}
+
+async function loadSubmissions() {
+  hideError();
+
+  try {
+    const response = await fetch("/api/admin/submissions");
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.error || "Gagal memuat data upload.");
+    }
+
+    uploadItems = Array.isArray(payload.items) ? payload.items : [];
+    renderSubmissionRows(uploadItems);
+    renderSubmissionSummary(uploadItems);
+  } catch (error) {
+    uploadItems = [];
+    renderSubmissionRows([]);
+    renderSubmissionSummary([]);
+    showError(error.message || "Gagal memuat data upload.");
+  } finally {
     updateExportButtonState();
   }
 }
@@ -131,6 +167,7 @@ function renderRows(items) {
     const noteStatus = fragment.querySelector(".row-note-status");
     const approveButton = fragment.querySelector(".button--approve");
     const rejectButton = fragment.querySelector(".button--reject");
+    const suspendButton = fragment.querySelector(".button--suspend");
     const initialNote = item.adminNote || item.rejectionReason || "";
 
     statusPill.textContent = item.status || "-";
@@ -170,10 +207,11 @@ function renderRows(items) {
 
     approveButton.disabled = item.status === "APPROVED";
     rejectButton.disabled = item.status === "REJECTED";
+    suspendButton.disabled = item.status === "SUSPENDED";
 
     noteInput.addEventListener("input", () => {
       item.adminNote = noteInput.value.trim();
-      if (item.status === "REJECTED") {
+      if (item.status === "REJECTED" || item.status === "SUSPENDED") {
         item.rejectionReason = item.adminNote;
       }
       setNoteStatus(noteStatus, "Belum disimpan", "dirty");
@@ -202,6 +240,15 @@ function renderRows(items) {
       }
       await updateStatus(item.registrationId, "reject", { adminNote });
     });
+    suspendButton.addEventListener("click", async () => {
+      const adminNote = noteInput.value.trim();
+      if (!adminNote) {
+        showError("Isi kolom catatan terlebih dahulu untuk alasan suspend.");
+        noteInput.focus();
+        return;
+      }
+      await updateStatus(item.registrationId, "suspend", { adminNote });
+    });
 
     row.dataset.status = item.status || "";
     tableBody.appendChild(row);
@@ -228,6 +275,7 @@ function renderSummary(items) {
       <td class="cell-nowrap">${row.pending}</td>
       <td class="cell-nowrap">${row.approved}</td>
       <td class="cell-nowrap">${row.rejected}</td>
+      <td class="cell-nowrap">${row.suspended}</td>
       <td class="cell-nowrap cell-strong">${row.total}</td>
     `;
     summaryBody.appendChild(tr);
@@ -240,9 +288,107 @@ function renderSummary(items) {
     <td class="cell-nowrap cell-strong">${totals.pending}</td>
     <td class="cell-nowrap cell-strong">${totals.approved}</td>
     <td class="cell-nowrap cell-strong">${totals.rejected}</td>
+    <td class="cell-nowrap cell-strong">${totals.suspended}</td>
     <td class="cell-nowrap cell-strong">${totals.total}</td>
   `;
   summaryBody.appendChild(totalRow);
+}
+
+function renderSubmissionRows(items) {
+  uploadTableBody.innerHTML = "";
+
+  if (!items.length) {
+    uploadTableScroll.classList.add("hidden");
+    uploadEmptyState.classList.remove("hidden");
+    return;
+  }
+
+  uploadTableScroll.classList.remove("hidden");
+  uploadEmptyState.classList.add("hidden");
+
+  items.forEach((item) => {
+    const fragment = uploadTemplate.content.cloneNode(true);
+    const statusPill = fragment.querySelector(".status-pill");
+    const submissionId = fragment.querySelector(".row-submission-id");
+    const uid = fragment.querySelector(".row-submission-uid");
+    const gmail = fragment.querySelector(".row-submission-gmail");
+    const project = fragment.querySelector(".row-submission-project");
+    const school = fragment.querySelector(".row-submission-school");
+    const fileCount = fragment.querySelector(".row-submission-file-count");
+    const fileList = fragment.querySelector(".row-submission-files");
+    const created = fragment.querySelector(".row-submission-created");
+    const uploaded = fragment.querySelector(".row-submission-uploaded");
+    const files = Array.isArray(item.files) ? item.files : [];
+
+    statusPill.textContent = item.status || "-";
+    statusPill.dataset.status = item.status || "";
+    submissionId.textContent = item.submissionId || "-";
+    uid.textContent = item.uid || "-";
+    gmail.textContent = item.gmail || "-";
+    project.textContent = item.projectName || "-";
+    school.textContent = item.formName || "-";
+    fileCount.textContent = String(files.length);
+    created.textContent = formatDate(item.createdAt);
+    uploaded.textContent = formatDate(item.uploadedAt);
+
+    if (!files.length) {
+      fileList.textContent = "-";
+    } else {
+      const wrapper = document.createElement("div");
+      wrapper.className = "submission-files";
+      files.forEach((file, index) => {
+        const link = document.createElement("a");
+        link.className = "submission-file-link";
+        link.textContent = file.filename || `File ${index + 1}`;
+        if (file.driveFileId) {
+          link.href = file.driveFileId;
+          link.target = "_blank";
+          link.rel = "noreferrer noopener";
+        } else {
+          link.classList.add("submission-file-link--muted");
+        }
+        wrapper.appendChild(link);
+      });
+      fileList.appendChild(wrapper);
+    }
+
+    uploadTableBody.appendChild(fragment);
+  });
+}
+
+function renderSubmissionSummary(items) {
+  uploadSummaryBody.innerHTML = "";
+
+  if (!items.length) {
+    uploadSummaryScroll.classList.add("hidden");
+    uploadSummaryEmptyState.classList.remove("hidden");
+    return;
+  }
+
+  const { rows, totals } = buildSubmissionSummary(items);
+  uploadSummaryScroll.classList.remove("hidden");
+  uploadSummaryEmptyState.classList.add("hidden");
+
+  rows.forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="cell-wrap cell-strong">${escapeHtml(row.schoolName)}</td>
+      <td class="cell-nowrap">${row.totalData}</td>
+      <td class="cell-nowrap">${row.totalFiles}</td>
+      <td class="cell-nowrap">${escapeHtml(formatDate(row.latestUploadedAt))}</td>
+    `;
+    uploadSummaryBody.appendChild(tr);
+  });
+
+  const totalRow = document.createElement("tr");
+  totalRow.className = "summary-total-row";
+  totalRow.innerHTML = `
+    <td class="cell-wrap cell-strong">Total</td>
+    <td class="cell-nowrap cell-strong">${totals.totalData}</td>
+    <td class="cell-nowrap cell-strong">${totals.totalFiles}</td>
+    <td class="cell-nowrap cell-strong">${escapeHtml(formatDate(totals.latestUploadedAt))}</td>
+  `;
+  uploadSummaryBody.appendChild(totalRow);
 }
 
 async function saveNote(item, noteInput, noteStatus, noteSaveButton, updatedCell) {
@@ -326,7 +472,11 @@ function setNoteStatus(element, message, state) {
 }
 
 function updateExportButtonState(isLoading = false) {
-  const hasRows = activeTab === "summary" ? summaryItems.length > 0 : currentItems.length > 0;
+  const hasRows = activeTab === "detail-registrations"
+    ? currentItems.length > 0
+    : activeTab === "summary-registrations"
+      ? summaryItems.length > 0
+      : uploadItems.length > 0;
   exportButton.disabled = isLoading || !hasRows;
 }
 
@@ -366,7 +516,7 @@ function trimAssetLabel(value) {
 }
 
 function exportToExcel() {
-  if (activeTab === "summary") {
+  if (activeTab === "summary-registrations") {
     exportSummaryToExcel();
     return;
   }
@@ -444,6 +594,7 @@ function exportSummaryToExcel() {
       row.pending,
       row.approved,
       row.rejected,
+      row.suspended,
       row.total,
     ];
 
@@ -463,6 +614,7 @@ function exportSummaryToExcel() {
               <th>Pending</th>
               <th>Approved</th>
               <th>Rejected</th>
+              <th>Suspended</th>
               <th>Total</th>
             </tr>
           </thead>
@@ -473,6 +625,7 @@ function exportSummaryToExcel() {
               <td><strong>${totals.pending}</strong></td>
               <td><strong>${totals.approved}</strong></td>
               <td><strong>${totals.rejected}</strong></td>
+              <td><strong>${totals.suspended}</strong></td>
               <td><strong>${totals.total}</strong></td>
             </tr>
           </tbody>
@@ -506,6 +659,7 @@ function buildAreaSummary(items) {
     pending: 0,
     approved: 0,
     rejected: 0,
+    suspended: 0,
     total: 0,
   };
 
@@ -519,6 +673,7 @@ function buildAreaSummary(items) {
         pending: 0,
         approved: 0,
         rejected: 0,
+        suspended: 0,
         total: 0,
       });
     }
@@ -536,6 +691,9 @@ function buildAreaSummary(items) {
     } else if (status === "REJECTED") {
       row.rejected += 1;
       totals.rejected += 1;
+    } else if (status === "SUSPENDED") {
+      row.suspended += 1;
+      totals.suspended += 1;
     }
   });
 
@@ -543,15 +701,63 @@ function buildAreaSummary(items) {
   return { rows, totals };
 }
 
+function buildSubmissionSummary(items) {
+  const schoolMap = new Map();
+  const totals = {
+    totalData: 0,
+    totalFiles: 0,
+    latestUploadedAt: "",
+  };
+
+  items.forEach((item) => {
+    const schoolName = item.formName || "Tanpa nama sekolah";
+    const uploadedAt = item.uploadedAt || item.createdAt || "";
+    const files = Array.isArray(item.files) ? item.files : [];
+
+    if (!schoolMap.has(schoolName)) {
+      schoolMap.set(schoolName, {
+        schoolName,
+        totalData: 0,
+        totalFiles: 0,
+        latestUploadedAt: "",
+      });
+    }
+
+    const row = schoolMap.get(schoolName);
+    row.totalData += 1;
+    row.totalFiles += files.length;
+    if (!row.latestUploadedAt || String(uploadedAt).localeCompare(String(row.latestUploadedAt)) > 0) {
+      row.latestUploadedAt = uploadedAt;
+    }
+
+    totals.totalData += 1;
+    totals.totalFiles += files.length;
+    if (!totals.latestUploadedAt || String(uploadedAt).localeCompare(String(totals.latestUploadedAt)) > 0) {
+      totals.latestUploadedAt = uploadedAt;
+    }
+  });
+
+  const rows = Array.from(schoolMap.values()).sort((a, b) => a.schoolName.localeCompare(b.schoolName, "id"));
+  return { rows, totals };
+}
+
 function setActiveTab(tab) {
   activeTab = tab;
-  const showingSummary = tab === "summary";
+  const showRegistrationSummary = tab === "summary-registrations";
+  const showRegistrationDetail = tab === "detail-registrations";
+  const showUploadSummary = tab === "summary-submissions";
+  const showUploadRaw = tab === "detail-submissions";
 
-  detailTabButton.setAttribute("aria-selected", showingSummary ? "false" : "true");
-  summaryTabButton.setAttribute("aria-selected", showingSummary ? "true" : "false");
-  detailToolbar.classList.toggle("hidden", showingSummary);
-  detailPanel.classList.toggle("hidden", showingSummary);
-  summaryPanel.classList.toggle("hidden", !showingSummary);
+  summaryTabButton.setAttribute("aria-selected", showRegistrationSummary ? "true" : "false");
+  detailTabButton.setAttribute("aria-selected", showRegistrationDetail ? "true" : "false");
+  uploadSummaryTabButton.setAttribute("aria-selected", showUploadSummary ? "true" : "false");
+  uploadRawTabButton.setAttribute("aria-selected", showUploadRaw ? "true" : "false");
+
+  detailToolbar.classList.toggle("hidden", !showRegistrationDetail);
+  summaryPanel.classList.toggle("hidden", !showRegistrationSummary);
+  detailPanel.classList.toggle("hidden", !showRegistrationDetail);
+  uploadSummaryPanel.classList.toggle("hidden", !showUploadSummary);
+  uploadRawPanel.classList.toggle("hidden", !showUploadRaw);
   updateExportButtonState();
 }
 
@@ -627,8 +833,10 @@ function escapeHtml(value) {
 
 statusFilter.addEventListener("change", loadRegistrations);
 exportButton.addEventListener("click", exportToExcel);
-detailTabButton.addEventListener("click", () => setActiveTab("detail"));
-summaryTabButton.addEventListener("click", () => setActiveTab("summary"));
+summaryTabButton.addEventListener("click", () => setActiveTab("summary-registrations"));
+detailTabButton.addEventListener("click", () => setActiveTab("detail-registrations"));
+uploadSummaryTabButton.addEventListener("click", () => setActiveTab("summary-submissions"));
+uploadRawTabButton.addEventListener("click", () => setActiveTab("detail-submissions"));
 masterUploadButton.addEventListener("click", uploadMasterDataExcel);
 masterRefreshButton.addEventListener("click", loadMasterDataInfo);
 masterFileInput.addEventListener("change", () => {
@@ -638,3 +846,5 @@ masterFileInput.addEventListener("change", () => {
 
 loadMasterDataInfo();
 loadRegistrations();
+loadSubmissions();
+setActiveTab(activeTab);

@@ -284,6 +284,8 @@ class RegistrationViewModel(
                     RegistrationStatus.APPROVED -> "Registrasi Anda sudah disetujui. Akses Home akan dibuka."
                     RegistrationStatus.REJECTED -> profile?.rejectionReason
                         ?: "Registrasi ditolak. Silakan periksa catatan admin."
+                    RegistrationStatus.SUSPENDED -> profile?.rejectionReason
+                        ?: "Akun Anda sedang ditangguhkan. Silakan hubungi admin."
                     RegistrationStatus.PENDING -> "Status terbaru: masih menunggu review admin."
                     RegistrationStatus.NOT_REGISTERED -> "Registrasi belum ditemukan di server."
                 }
@@ -426,6 +428,7 @@ class RegistrationViewModel(
     private fun fallbackStatusMessage(status: RegistrationStatus?): String = when (status) {
         RegistrationStatus.APPROVED -> "Registrasi Anda sudah disetujui. Akses Home akan dibuka."
         RegistrationStatus.REJECTED -> "Registrasi ditolak. Silakan periksa catatan admin."
+        RegistrationStatus.SUSPENDED -> "Akun Anda sedang ditangguhkan. Silakan hubungi admin."
         RegistrationStatus.PENDING -> "Registrasi sudah dikirim. Status terakhir masih menunggu review admin."
         RegistrationStatus.NOT_REGISTERED, null ->
             "Belum bisa memeriksa status otomatis. Tekan Refresh Status untuk mencoba lagi."

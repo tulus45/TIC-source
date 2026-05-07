@@ -23,6 +23,7 @@ const dataDir = resolveRuntimePath(process.env.TIC_DATA_DIR, path.join(storageRo
 const publicDir = path.join(rootDir, "public");
 const uploadsDir = resolveRuntimePath(process.env.TIC_UPLOADS_DIR, path.join(storageRoot, "uploads"));
 const registrationsFile = path.join(dataDir, "registrations.json");
+const submissionsFile = path.join(dataDir, "submissions.json");
 const bundledSchoolMasterFile = path.join(rootDir, "data", "school_master.json");
 const schoolMasterFile = path.join(dataDir, "school_master.json");
 
@@ -46,6 +47,12 @@ async function ensureStorage() {
     await fs.access(registrationsFile);
   } catch {
     await fs.writeFile(registrationsFile, "[]\n", "utf8");
+  }
+
+  try {
+    await fs.access(submissionsFile);
+  } catch {
+    await fs.writeFile(submissionsFile, "[]\n", "utf8");
   }
 
   try {
@@ -81,6 +88,22 @@ async function writeRegistrations(items) {
   await ensureStorage();
   await fs.writeFile(
     registrationsFile,
+    `${JSON.stringify(items, null, 2)}\n`,
+    "utf8",
+  );
+}
+
+async function readSubmissions() {
+  await ensureStorage();
+  const raw = await fs.readFile(submissionsFile, "utf8");
+  const parsed = JSON.parse(raw);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+async function writeSubmissions(items) {
+  await ensureStorage();
+  await fs.writeFile(
+    submissionsFile,
     `${JSON.stringify(items, null, 2)}\n`,
     "utf8",
   );
@@ -361,6 +384,68 @@ function validateSchoolMasterUploadPayload(body) {
   return null;
 }
 
+function validateSubmissionPayload(body) {
+  const requiredFields = [
+    ["submissionId", "Submission ID wajib dikirim."],
+    ["uid", "UID wajib dikirim."],
+    ["formName", "Nama sekolah wajib dikirim."],
+    ["createdAt", "Tanggal simpan wajib dikirim."],
+  ];
+
+  for (const [field, message] of requiredFields) {
+    if (!normalizeString(body[field])) {
+      return message;
+    }
+  }
+
+  return null;
+}
+
+function sanitizePathSegment(value, fallback = "item") {
+  const normalized = normalizeString(value).replace(/[^a-zA-Z0-9_-]/g, "_");
+  return normalized || fallback;
+}
+
+async function storeSubmissionFiles(uid, submissionId, files) {
+  if (!Array.isArray(files) || !files.length) {
+    return [];
+  }
+
+  const safeUid = sanitizePathSegment(uid, "unknown_uid");
+  const safeSubmissionId = sanitizePathSegment(submissionId, `submission_${Date.now()}`);
+  const targetDir = path.join(uploadsDir, "submissions", safeUid, safeSubmissionId);
+  await fs.mkdir(targetDir, { recursive: true });
+
+  const storedFiles = [];
+  for (const [index, file] of files.entries()) {
+    const originalFileName = normalizeString(file.filename) || `evidence_${index + 1}.jpg`;
+    const extension = getUploadExtension(originalFileName, file.mimeType);
+    const safeBaseName = sanitizePathSegment(path.parse(originalFileName).name, `evidence_${index + 1}`);
+    const storedFileName = `${String(index + 1).padStart(2, "0")}_${safeBaseName}${extension}`;
+    const base64Data = normalizeString(file.base64Data);
+    let fileUrl = normalizeString(file.driveFileId) || null;
+
+    if (base64Data) {
+      const targetPath = path.join(targetDir, storedFileName);
+      await fs.writeFile(targetPath, Buffer.from(base64Data, "base64"));
+      fileUrl = `/uploads/submissions/${encodeURIComponent(safeUid)}/${encodeURIComponent(safeSubmissionId)}/${encodeURIComponent(storedFileName)}`;
+    }
+
+    storedFiles.push({
+      id: normalizeString(file.id) || `file-${randomUUID().slice(0, 8)}`,
+      submissionId: normalizeString(file.submissionId) || submissionId,
+      fileType: normalizeString(file.fileType) || "PHOTO",
+      localPath: normalizeString(file.localPath),
+      driveFileId: fileUrl,
+      filename: originalFileName,
+      createdAt: normalizeString(file.createdAt) || new Date().toISOString(),
+      mimeType: normalizeString(file.mimeType) || "image/jpeg",
+    });
+  }
+
+  return storedFiles;
+}
+
 async function storeRegistrationAsset(body) {
   const uid = normalizeString(body.uid);
   const assetType = normalizeString(body.assetType).toLowerCase();
@@ -393,6 +478,34 @@ function findRegistration(items, searchParams) {
     if (gmail && item.gmail.toLowerCase() === gmail) return true;
     return false;
   });
+}
+
+async function buildSubmissionRecord(body) {
+  const now = new Date().toISOString();
+  const files = await storeSubmissionFiles(
+    normalizeString(body.uid),
+    normalizeString(body.submissionId),
+    Array.isArray(body.files) ? body.files : [],
+  );
+
+  return {
+    submissionId: normalizeString(body.submissionId),
+    uid: normalizeString(body.uid),
+    gmail: normalizeString(body.gmail),
+    projectName: normalizeString(body.projectName),
+    formName: normalizeString(body.formName),
+    answersJson: typeof body.answersJson === "string" ? body.answersJson : JSON.stringify(body.answersJson || {}),
+    gpsLat: typeof body.gpsLat === "number" ? body.gpsLat : null,
+    gpsLng: typeof body.gpsLng === "number" ? body.gpsLng : null,
+    gpsAccuracy: typeof body.gpsAccuracy === "number" ? body.gpsAccuracy : null,
+    driveFolderId: normalizeString(body.driveFolderId) || null,
+    status: "UPLOADED",
+    createdAt: normalizeString(body.createdAt) || now,
+    uploadedAt: now,
+    files,
+    source: "android",
+    updatedAt: now,
+  };
 }
 
 async function handleApi(req, res, url) {
@@ -526,6 +639,77 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/submissions") {
+    let body;
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      sendJson(res, 400, { error: "Body JSON tidak valid." });
+      return;
+    }
+
+    const validationError = validateSubmissionPayload(body);
+    if (validationError) {
+      sendJson(res, 422, { error: validationError });
+      return;
+    }
+
+    const items = await readSubmissions();
+    const record = await buildSubmissionRecord(body);
+    const existingIndex = items.findIndex((item) => item.submissionId === record.submissionId);
+    if (existingIndex >= 0) {
+      items[existingIndex] = {
+        ...items[existingIndex],
+        ...record,
+        createdAt: items[existingIndex].createdAt || record.createdAt,
+      };
+    } else {
+      items.unshift(record);
+    }
+
+    await writeSubmissions(items);
+    sendJson(res, 201, {
+      submissionId: record.submissionId,
+      driveFolderId: record.driveFolderId,
+      driveFileIds: record.files.map((file) => file.driveFileId).filter(Boolean),
+      uploadStatus: record.status,
+      uploadedAt: record.uploadedAt,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/submissions/me") {
+    const items = await readSubmissions();
+    const uid = normalizeString(url.searchParams.get("uid"));
+    const gmail = normalizeString(url.searchParams.get("gmail")).toLowerCase();
+    const filtered = items.filter((item) => {
+      if (uid && item.uid === uid) return true;
+      if (gmail && normalizeString(item.gmail).toLowerCase() === gmail) return true;
+      return false;
+    });
+
+    sendJson(
+      res,
+      200,
+      filtered.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))),
+    );
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/submissions") {
+    const items = await readSubmissions();
+    const statusFilter = normalizeString(url.searchParams.get("status")).toUpperCase();
+    const filtered = statusFilter
+      ? items.filter((item) => normalizeString(item.status).toUpperCase() === statusFilter)
+      : items;
+
+    sendJson(res, 200, {
+      items: filtered.sort((a, b) => String(b.uploadedAt || b.createdAt).localeCompare(String(a.uploadedAt || a.createdAt))),
+      count: filtered.length,
+    });
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/admin/master-data/schools/upload") {
     let body;
     try {
@@ -578,7 +762,7 @@ async function handleApi(req, res, url) {
     return;
   }
 
-  const approvalMatch = url.pathname.match(/^\/api\/admin\/registrations\/([^/]+)\/(approve|reject)$/);
+  const approvalMatch = url.pathname.match(/^\/api\/admin\/registrations\/([^/]+)\/(approve|reject|suspend)$/);
   if (req.method === "POST" && approvalMatch) {
     const [, registrationId, action] = approvalMatch;
     let body = {};
@@ -597,11 +781,17 @@ async function handleApi(req, res, url) {
     }
 
     const adminNote = normalizeString(body.adminNote) || normalizeString(body.rejectionReason);
-    target.status = action === "approve" ? "APPROVED" : "REJECTED";
+    target.status = action === "approve"
+      ? "APPROVED"
+      : action === "reject"
+        ? "REJECTED"
+        : "SUSPENDED";
     target.adminNote = adminNote || target.adminNote || null;
-    target.rejectionReason = action === "reject"
-      ? adminNote || "Tidak ada catatan tambahan."
-      : null;
+    target.rejectionReason = action === "approve"
+      ? null
+      : adminNote || (action === "suspend"
+        ? "Akun sedang ditangguhkan oleh admin."
+        : "Tidak ada catatan tambahan.");
     target.updatedAt = new Date().toISOString();
 
     await writeRegistrations(items);
@@ -635,8 +825,12 @@ async function handleApi(req, res, url) {
 
     const adminNote = normalizeString(body.adminNote) || null;
     target.adminNote = adminNote;
-    if (target.status === "REJECTED") {
-      target.rejectionReason = adminNote || "Tidak ada catatan tambahan.";
+    if (target.status === "REJECTED" || target.status === "SUSPENDED") {
+      target.rejectionReason = adminNote || (
+        target.status === "SUSPENDED"
+          ? "Akun sedang ditangguhkan oleh admin."
+          : "Tidak ada catatan tambahan."
+      );
     }
     target.updatedAt = new Date().toISOString();
 
