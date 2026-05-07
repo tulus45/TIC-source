@@ -36,7 +36,8 @@ import kotlinx.coroutines.launch
 object InMemorySessionStore {
     private const val databaseName = "tic_collect.db"
     private const val preferencesName = "tic_collect_prefs"
-    private const val demoUidKey = "demo_uid"
+    private const val installationUidKey = "installation_uid"
+    private const val legacyDemoUidKey = "demo_uid"
 
     private val storeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _session = MutableStateFlow(SessionState())
@@ -71,49 +72,75 @@ object InMemorySessionStore {
             sessionDao = database.sessionDao()
             registrationDraftDao = database.registrationDraftDao()
             initialized = true
+            _session.value = SessionState(
+                isAuthenticated = true,
+                user = buildLocalIdentity(),
+            )
             bindPersistentFlows()
+            ensureLocalIdentity()
+        }
+    }
+
+    fun ensureLocalIdentity() {
+        ensureInitialized()
+        val localIdentity = buildLocalIdentity()
+        _session.value = _session.value.copy(
+            isAuthenticated = true,
+            user = localIdentity,
+        )
+
+        storeScope.launch {
+            sessionDao.upsert(
+                SessionEntity(
+                    isAuthenticated = true,
+                    uid = localIdentity.uid,
+                    gmail = localIdentity.gmail,
+                    displayName = localIdentity.displayName,
+                    photoUrl = localIdentity.photoUrl,
+                    firebaseIdToken = localIdentity.firebaseIdToken,
+                ),
+            )
         }
     }
 
     suspend fun simulateGoogleLogin() {
-        ensureInitialized()
-
-        val current = session.value
-        val currentUser = current.user
-        val demoUser = if (currentUser != null && currentUser.uid != "tic-demo-uid-001") {
-            currentUser
-        } else {
-            AuthenticatedUser(
-                uid = getOrCreateDemoUid(),
-                gmail = "",
-                displayName = "Enumerator Demo TIC",
-                photoUrl = null,
-                firebaseIdToken = "demo-firebase-id-token",
-            )
-        }
-
-        sessionDao.upsert(
-            SessionEntity(
-                isAuthenticated = true,
-                uid = demoUser.uid,
-                gmail = demoUser.gmail,
-                displayName = demoUser.displayName,
-                photoUrl = demoUser.photoUrl,
-                firebaseIdToken = demoUser.firebaseIdToken,
-            ),
-        )
+        ensureLocalIdentity()
     }
 
-    private fun getOrCreateDemoUid(): String {
+    private fun getOrCreateInstallationUid(): String {
         val preferences = application.getSharedPreferences(preferencesName, Application.MODE_PRIVATE)
-        val existingValue = preferences.getString(demoUidKey, null)?.trim().orEmpty()
+        val existingValue = preferences.getString(installationUidKey, null)?.trim().orEmpty()
         if (existingValue.isNotBlank()) {
             return existingValue
         }
 
-        val generatedUid = "tic-demo-${UUID.randomUUID()}"
-        preferences.edit().putString(demoUidKey, generatedUid).apply()
-        return generatedUid
+        val legacyValue = preferences.getString(legacyDemoUidKey, null)?.trim().orEmpty()
+        val resolvedUid = if (legacyValue.isNotBlank()) legacyValue else "tic-installation-${UUID.randomUUID()}"
+
+        preferences.edit()
+            .putString(installationUidKey, resolvedUid)
+            .apply()
+        if (legacyValue.isBlank()) {
+            preferences.edit().remove(legacyDemoUidKey).apply()
+        }
+        return resolvedUid
+    }
+
+    private fun buildLocalIdentity(): AuthenticatedUser = AuthenticatedUser(
+        uid = getOrCreateInstallationUid(),
+        gmail = "",
+        displayName = "",
+        photoUrl = null,
+        firebaseIdToken = null,
+    )
+
+    private fun buildFallbackSessionState(): SessionState {
+        val localIdentity = buildLocalIdentity()
+        return SessionState(
+            isAuthenticated = true,
+            user = localIdentity,
+            profile = _session.value.profile?.takeIf { it.uid == localIdentity.uid },
+        )
     }
 
     suspend fun saveRegistrationDraft(draft: LocalRegistrationDraft) {
@@ -264,9 +291,10 @@ object InMemorySessionStore {
                 val user = sessionEntity?.toAuthenticatedUser()
 
                 if (sessionEntity == null || user == null) {
-                    _session.value = SessionState()
+                    _session.value = buildFallbackSessionState()
                     _currentRegistrationDraft.value = null
                     _submissions.value = emptyList()
+                    ensureLocalIdentity()
                     return@collectLatest
                 }
 

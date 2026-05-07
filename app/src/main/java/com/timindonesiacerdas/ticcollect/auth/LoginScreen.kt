@@ -2,12 +2,10 @@ package com.timindonesiacerdas.ticcollect.auth
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import com.timindonesiacerdas.ticcollect.ui.components.TicPrimaryButton
 import com.timindonesiacerdas.ticcollect.ui.components.TicScreenContainer
@@ -44,23 +42,18 @@ fun LoginScreen(
         }
 
         TicSectionCard(
-            title = "Google Sign-In",
-            subtitle = "Tahap 1 masih memakai akun demo internal agar flow dan navigasi bisa diuji dulu.",
+            title = "Mode Lama",
+            subtitle = "Layar ini sudah tidak dipakai pada alur utama aplikasi.",
         ) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator()
-                }
                 TicPrimaryButton(
-                    text = if (uiState.isLoading) "Masuk..." else "Login with Gmail",
+                    text = "Lanjut",
                     onClick = onLoginClick,
-                    enabled = !uiState.isLoading,
                 )
                 Text(
-                    text = "TODO tahap 2: hubungkan ke Firebase Auth + Google Credential Manager.",
+                    text = "Alur registrasi sekarang langsung menggunakan identitas perangkat lokal tanpa login manual.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                 )

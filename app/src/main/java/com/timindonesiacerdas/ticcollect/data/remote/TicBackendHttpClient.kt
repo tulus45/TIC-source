@@ -79,6 +79,21 @@ object TicBackendHttpClient : TicBackendApiContract {
         )
     }
 
+    override suspend fun getSchoolMasterData(): SchoolMasterDataResponse {
+        val payload = requestJson(
+            method = "GET",
+            path = TicApiRoutes.schoolMaster,
+        )
+
+        return SchoolMasterDataResponse(
+            datasetId = payload.optString("datasetId"),
+            title = payload.optString("title"),
+            columns = payload.optStringList("columns"),
+            rows = payload.optNestedStringLists("rows"),
+            updatedAt = payload.optStringOrNull("updatedAt"),
+        )
+    }
+
     override suspend fun getRegistrationStatus(
         uid: String?,
         gmail: String?,
@@ -311,6 +326,35 @@ object TicBackendHttpClient : TicBackendApiContract {
     private fun JSONObject.optRegistrationStatus(key: String): RegistrationStatus =
         runCatching { RegistrationStatus.valueOf(optString(key).trim().uppercase()) }
             .getOrDefault(RegistrationStatus.NOT_REGISTERED)
+
+    private fun JSONObject.optStringList(key: String): List<String> {
+        val rawArray = optJSONArray(key) ?: return emptyList()
+        return buildList(rawArray.length()) {
+            for (index in 0 until rawArray.length()) {
+                val value = rawArray.optString(index).trim()
+                if (value.isNotBlank()) {
+                    add(value)
+                }
+            }
+        }
+    }
+
+    private fun JSONObject.optNestedStringLists(key: String): List<List<String>> {
+        val rawArray = optJSONArray(key) ?: return emptyList()
+        return buildList(rawArray.length()) {
+            for (index in 0 until rawArray.length()) {
+                val rowArray = rawArray.optJSONArray(index) ?: continue
+                val row = buildList(rowArray.length()) {
+                    for (cellIndex in 0 until rowArray.length()) {
+                        add(rowArray.optString(cellIndex).trim())
+                    }
+                }
+                if (row.any { it.isNotBlank() }) {
+                    add(row)
+                }
+            }
+        }
+    }
 
     private fun JSONObject.optStringOrNull(key: String): String? {
         if (isNull(key)) return null

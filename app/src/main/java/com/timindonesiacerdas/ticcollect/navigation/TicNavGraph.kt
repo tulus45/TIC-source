@@ -10,6 +10,7 @@ import androidx.navigation.compose.rememberNavController
 import com.timindonesiacerdas.ticcollect.auth.*
 import com.timindonesiacerdas.ticcollect.camera.*
 import com.timindonesiacerdas.ticcollect.form.FormScreen
+import com.timindonesiacerdas.ticcollect.form.FormViewModel
 import com.timindonesiacerdas.ticcollect.home.*
 import com.timindonesiacerdas.ticcollect.location.GpsCaptureScreen
 import com.timindonesiacerdas.ticcollect.registration.*
@@ -19,12 +20,14 @@ import com.timindonesiacerdas.ticcollect.upload.*
 fun TicNavGraph(
     authViewModel: AuthViewModel,
     registrationViewModel: RegistrationViewModel,
+    formViewModel: FormViewModel,
     homeViewModel: HomeViewModel,
     uploadViewModel: UploadViewModel,
     navController: NavHostController = rememberNavController(),
 ) {
     val authUiState = authViewModel.uiState.collectAsStateWithLifecycle().value
     val registrationUiState = registrationViewModel.uiState.collectAsStateWithLifecycle().value
+    val formUiState = formViewModel.uiState.collectAsStateWithLifecycle().value
     val homeUiState = homeViewModel.uiState.collectAsStateWithLifecycle().value
     val pendingUploadUiState = uploadViewModel.uiState.collectAsStateWithLifecycle().value
 
@@ -33,37 +36,36 @@ fun TicNavGraph(
         startDestination = TicRoutes.Welcome,
     ) {
         composable(TicRoutes.Welcome) {
-            WelcomeScreen(
-                uiState = authUiState,
-                onLoginClick = authViewModel::simulateGoogleLogin,
-                onRegistrationClick = {
-                    val nextRoute = if (
-                        authUiState.session.isAuthenticated &&
-                        (authUiState.session.profile?.status
-                            ?: com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.NOT_REGISTERED) ==
-                        com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.NOT_REGISTERED
-                    ) {
-                        TicRoutes.Registration
-                    } else {
-                        AuthViewModel.destinationFor(authUiState.session)
-                    }
-                    navController.navigate(nextRoute)
-                },
-            )
-        }
+            LaunchedEffect(authUiState.session.profile?.status) {
+                val destination = AuthViewModel.destinationFor(authUiState.session)
+                if (destination != TicRoutes.Welcome) {
+                    navController.navigateClearingBackStack(destination)
+                }
+            }
 
-        composable(TicRoutes.Login) {
-            LoginScreen(
-                uiState = authUiState,
-                onBack = { navController.popBackStack() },
-                onLoginClick = authViewModel::simulateGoogleLogin,
-                onLoginResolved = { route ->
-                    navController.navigateClearingBackStack(route)
+            WelcomeScreen(
+                onRegistrationClick = {
+                    navController.navigate(TicRoutes.Registration)
                 },
             )
         }
 
         composable(TicRoutes.Registration) {
+            LaunchedEffect(registrationUiState.currentStatus) {
+                when (registrationUiState.currentStatus) {
+                    com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.PENDING -> {
+                        navController.navigateClearingBackStack(TicRoutes.WaitingApproval)
+                    }
+                    com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.APPROVED -> {
+                        navController.navigateClearingBackStack(TicRoutes.Home)
+                    }
+                    com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.REJECTED -> {
+                        navController.navigateClearingBackStack(TicRoutes.Rejected)
+                    }
+                    else -> Unit
+                }
+            }
+
             RegistrationScreen(
                 uiState = registrationUiState,
                 onBack = { navController.popBackStack() },
@@ -128,10 +130,6 @@ fun TicNavGraph(
                 statusSyncMessage = registrationUiState.statusSyncMessage,
                 isRefreshing = registrationUiState.isRefreshingStatus,
                 onRefreshStatus = registrationViewModel::refreshRegistrationStatus,
-                onLogout = {
-                    authViewModel.logout()
-                    navController.navigateClearingBackStack(TicRoutes.Welcome)
-                },
             )
         }
 
@@ -140,10 +138,6 @@ fun TicNavGraph(
                 rejectionReason = registrationUiState.rejectionReason,
                 onEditRegistration = {
                     navController.navigateClearingBackStack(TicRoutes.Registration)
-                },
-                onLogout = {
-                    authViewModel.logout()
-                    navController.navigateClearingBackStack(TicRoutes.Welcome)
                 },
             )
         }
@@ -155,19 +149,19 @@ fun TicNavGraph(
                 onPendingUpload = { navController.navigate(TicRoutes.PendingUpload) },
                 onHistory = { navController.navigate(TicRoutes.SubmissionHistory) },
                 onProfile = { navController.navigate(TicRoutes.Profile) },
-                onLogout = {
-                    homeViewModel.logout()
-                    navController.navigateClearingBackStack(TicRoutes.Welcome)
-                },
             )
         }
 
         composable(TicRoutes.Form) {
             FormScreen(
+                uiState = formUiState,
                 onBack = { navController.popBackStack() },
                 onPhotoCapture = { navController.navigate(TicRoutes.PhotoCapture) },
                 onVideoCapture = { navController.navigate(TicRoutes.VideoCapture) },
                 onGpsCapture = { navController.navigate(TicRoutes.GpsCapture) },
+                onRetryLoadMasterData = { formViewModel.loadMasterData(force = true) },
+                onSelectValue = formViewModel::selectValue,
+                onClearSelections = formViewModel::clearSelections,
             )
         }
 
@@ -207,10 +201,6 @@ fun TicNavGraph(
             ProfileScreen(
                 uiState = homeUiState,
                 onBack = { navController.popBackStack() },
-                onLogout = {
-                    homeViewModel.logout()
-                    navController.navigateClearingBackStack(TicRoutes.Welcome)
-                },
             )
         }
     }

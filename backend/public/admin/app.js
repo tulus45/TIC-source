@@ -13,10 +13,16 @@ const summaryPanel = document.getElementById("summaryPanel");
 const summaryScroll = document.getElementById("summaryScroll");
 const summaryBody = document.getElementById("summaryBody");
 const summaryEmptyState = document.getElementById("summaryEmptyState");
+const masterFileInput = document.getElementById("masterFileInput");
+const masterUploadButton = document.getElementById("masterUploadButton");
+const masterRefreshButton = document.getElementById("masterRefreshButton");
+const masterUploadStatus = document.getElementById("masterUploadStatus");
+const masterDataInfo = document.getElementById("masterDataInfo");
 const template = document.getElementById("rowTemplate");
 let currentItems = [];
 let summaryItems = [];
 let activeTab = "summary";
+let currentMasterData = null;
 
 async function loadRegistrations() {
   setLoading(true);
@@ -57,6 +63,31 @@ async function loadRegistrations() {
   } finally {
     setLoading(false);
     updateExportButtonState();
+  }
+}
+
+async function loadMasterDataInfo() {
+  try {
+    const response = await fetch("/api/master-data/schools");
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.error || "Gagal memuat master data sekolah.");
+    }
+
+    currentMasterData = payload;
+    const columns = Array.isArray(payload.columns) ? payload.columns : [];
+    const rows = Array.isArray(payload.rows) ? payload.rows : [];
+    masterDataInfo.textContent = [
+      `Dataset: ${payload.title || "Master Lokasi Sekolah"}`,
+      `Kolom: ${columns.length ? columns.join(" -> ") : "-"}`,
+      `Jumlah baris: ${rows.length}`,
+      `Update terakhir: ${formatDate(payload.updatedAt)}`,
+    ].join(" | ");
+  } catch (error) {
+    currentMasterData = null;
+    masterDataInfo.textContent = error.message || "Belum bisa memuat info master data.";
+    showError(error.message || "Belum bisa memuat info master data.");
   }
 }
 
@@ -272,6 +303,11 @@ async function updateStatus(registrationId, action, body = {}) {
 
 function setLoading(isLoading) {
   updateExportButtonState(isLoading);
+}
+
+function setMasterUploadState(message, state = "") {
+  masterUploadStatus.textContent = message;
+  masterUploadStatus.dataset.state = state;
 }
 
 function showError(message) {
@@ -519,6 +555,68 @@ function setActiveTab(tab) {
   updateExportButtonState();
 }
 
+async function uploadMasterDataExcel() {
+  const file = masterFileInput.files?.[0];
+  if (!file) {
+    setMasterUploadState("Pilih file Excel terlebih dahulu.", "error");
+    return;
+  }
+
+  hideError();
+  masterUploadButton.disabled = true;
+  masterRefreshButton.disabled = true;
+  setMasterUploadState(`Mengupload ${file.name}...`, "saving");
+
+  try {
+    const base64Data = await readFileAsBase64(file);
+    const response = await fetch("/api/admin/master-data/schools/upload", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fileName: file.name,
+        base64Data,
+      }),
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.details || payload.error || "Upload Excel gagal.");
+    }
+
+    setMasterUploadState(
+      `Upload berhasil. ${payload.columns.length} kolom dan ${payload.rowCount} baris aktif terbaca.`,
+      "saved"
+    );
+    masterFileInput.value = "";
+    await loadMasterDataInfo();
+  } catch (error) {
+    setMasterUploadState(error.message || "Upload Excel gagal.", "error");
+    showError(error.message || "Upload Excel gagal.");
+  } finally {
+    masterUploadButton.disabled = false;
+    masterRefreshButton.disabled = false;
+  }
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const base64Data = result.includes(",") ? result.split(",").pop() : result;
+      if (!base64Data) {
+        reject(new Error("File Excel tidak bisa dibaca."));
+        return;
+      }
+      resolve(base64Data);
+    };
+    reader.onerror = () => reject(new Error("File Excel tidak bisa dibaca."));
+    reader.readAsDataURL(file);
+  });
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -531,5 +629,12 @@ statusFilter.addEventListener("change", loadRegistrations);
 exportButton.addEventListener("click", exportToExcel);
 detailTabButton.addEventListener("click", () => setActiveTab("detail"));
 summaryTabButton.addEventListener("click", () => setActiveTab("summary"));
+masterUploadButton.addEventListener("click", uploadMasterDataExcel);
+masterRefreshButton.addEventListener("click", loadMasterDataInfo);
+masterFileInput.addEventListener("change", () => {
+  const file = masterFileInput.files?.[0];
+  setMasterUploadState(file ? `Siap upload: ${file.name}` : "Belum ada file dipilih.", file ? "dirty" : "");
+});
 
+loadMasterDataInfo();
 loadRegistrations();

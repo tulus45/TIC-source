@@ -1,0 +1,55 @@
+{
+  "datasetId": "school-location-master",
+  "title": "Master Lokasi Sekolah",
+  "columns": [
+    "Kabupaten",
+    "Kecamatan",
+    "Kelurahan",
+    "Sekolah"
+  ],
+  "rows": [
+    [
+      "Kab. Sumba Barat",
+      "Kecamatan1",
+      "Kelurahan1",
+      "Sekolah1"
+    ],
+    [
+      "Kab. Sumba Barat Daya",
+      "Kecamatan2",
+      "Kelurahan2",
+      "Sekolah2"
+    ],
+    [
+      "Kab. Sumba Tengah",
+      "Kecamatan3",
+      "Kelurahan3",
+      "Sekolah3"
+    ],
+    [
+      "Kab. Sumba Timur",
+      "Kecamatan4",
+      "Kelurahan4",
+      "Sekolah4"
+    ],
+    [
+      "Kab. Timor Tengah Selatan",
+      "Kecamatan5",
+      "Kelurahan5",
+      "Sekolah5"
+    ],
+    [
+      "Kab. Timor Tengah Utara",
+      "Kecamatan6",
+      "Kelurahan6",
+      "Sekolah6"
+    ],
+    [
+      "Kota Kupang",
+      "Kecamatan7",
+      "Kelurahan7",
+      "Sekolah7"
+    ]
+  ],
+  "updatedAt": "2026-05-07T00:00:00.000Z"
+}

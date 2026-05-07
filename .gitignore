@@ -15,7 +15,9 @@ local.properties
 
 # Backend runtime data
 backend/node_modules/
-backend/data/
+backend/data/*
+!backend/data/
+!backend/data/school_master.json
 backend/uploads/
 backend/storage/
 backend/.env

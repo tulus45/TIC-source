@@ -7,7 +7,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
-import com.timindonesiacerdas.ticcollect.ui.components.TicPrimaryButton
 import com.timindonesiacerdas.ticcollect.ui.components.TicScreenContainer
 import com.timindonesiacerdas.ticcollect.ui.components.TicSectionCard
 import com.timindonesiacerdas.ticcollect.ui.components.TicStatusPill
@@ -16,7 +15,6 @@ import com.timindonesiacerdas.ticcollect.ui.components.TicStatusPill
 fun ProfileScreen(
     uiState: HomeUiState,
     onBack: () -> Unit,
-    onLogout: () -> Unit,
 ) {
     val user = uiState.session.user
     val profile = uiState.session.profile
@@ -24,7 +22,7 @@ fun ProfileScreen(
 
     TicScreenContainer(
         title = "Profile",
-        subtitle = "Ringkasan akun login dan metadata registrasi yang sudah tersimpan pada device.",
+        subtitle = "Ringkasan identitas registrasi dan metadata yang tersimpan pada device.",
         onBack = onBack,
     ) {
         TicSectionCard(
@@ -34,12 +32,11 @@ fun ProfileScreen(
         }
 
         TicSectionCard(
-            title = "Identitas Login",
+            title = "Identitas Perangkat",
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "UID: ${user?.uid.orEmpty()}")
+                Text(text = "ID Perangkat: ${user?.uid.orEmpty()}")
                 Text(text = "Email: $displayedEmail")
-                Text(text = "Display Name: ${user?.displayName.orEmpty()}")
             }
         }
 
@@ -61,10 +58,5 @@ fun ProfileScreen(
                 )
             }
         }
-
-        TicPrimaryButton(
-            text = "Logout",
-            onClick = onLogout,
-        )
     }
 }

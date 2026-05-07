@@ -26,6 +26,8 @@ Kalau variabel itu tidak diisi, backend tetap memakai folder lokal seperti sekar
 
 - `POST /api/registrations` untuk menyimpan atau memperbarui registrasi berdasarkan `uid`
 - `POST /api/uploads/registration-assets` untuk upload file KTP dan selfie
+- `GET /api/master-data/schools` untuk master data cascading lokasi sekolah
+- `POST /api/admin/master-data/schools/upload` untuk update master data lokasi dari file Excel
 - `GET /api/registrations/status` untuk membaca status approval
 - `GET /api/users/me` untuk membaca profil registrasi berdasarkan `uid`, `gmail`, atau `registrationId`
 - `GET /api/admin/registrations` untuk daftar review di web admin
@@ -36,6 +38,7 @@ Kalau variabel itu tidak diisi, backend tetap memakai folder lokal seperti sekar
 Catatan:
 
 - backend ini masih menyimpan data di file `backend/data/registrations.json`
+- master data sekolah sekarang disimpan di `school_master.json` pada folder data runtime yang persisten
 - file KTP dan selfie sekarang disimpan sungguhan di folder `backend/uploads/registrations/...`
 - field `ktpDriveFileId` dan `selfieDriveFileId` saat ini dipakai sebagai URL file upload hasil simpan backend lokal
 
@@ -144,6 +147,35 @@ Contoh:
 - `GET /api/registrations/status?uid=tic-demo-uid-001`
 - `GET /api/registrations/status?gmail=demo@tic.local`
 - `GET /api/users/me?registrationId=reg-...`
+
+## Master Data Sekolah
+
+Android `Start Data Collection` sekarang membaca data cascading dari endpoint:
+
+- `GET /api/master-data/schools`
+
+Strukturnya:
+
+```json
+{
+  "datasetId": "school-location-master",
+  "title": "Master Lokasi Sekolah",
+  "columns": ["Kabupaten", "Kecamatan", "Kelurahan", "Sekolah"],
+  "rows": [
+    ["Kab. Sumba Barat", "Kecamatan1", "Kelurahan1", "Sekolah1"]
+  ],
+  "updatedAt": "2026-05-07T00:00:00.000Z"
+}
+```
+
+Kalau admin ingin update list, cukup buka halaman `/admin`, lalu upload file Excel terbaru pada panel `Master Data Sekolah`.
+
+Catatan format Excel:
+
+- backend membaca sheet pertama
+- baris header pertama yang terisi dipakai sebagai nama kolom cascading
+- jumlah kolom fleksibel
+- semua baris di bawah header yang berisi data akan dimasukkan sebagai opsi cascading
 
 ## Langkah Lanjutan
 

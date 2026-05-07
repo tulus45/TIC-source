@@ -104,18 +104,6 @@ fun RegistrationScreen(
             }
         },
     ) {
-        if (!uiState.isAuthenticated) {
-            TicSectionCard(
-                title = "Login dibutuhkan",
-                subtitle = "Stage 1 menahan registrasi sampai akun Gmail aktif.",
-            ) {
-                Text(
-                    text = "Buka ulang halaman ini setelah login Gmail.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-        }
-
         if (!uiState.errorMessage.isNullOrBlank()) {
             TicSectionCard(
                 title = "Perlu diperbaiki",
@@ -255,7 +243,7 @@ fun RegistrationScreen(
                         TicPrimaryButton(
                             text = if (uiState.isSubmitting) "Mengirim..." else "Submit Registration",
                             onClick = onSubmit,
-                            enabled = !uiState.isSubmitting && uiState.isAuthenticated,
+                            enabled = !uiState.isSubmitting,
                         )
                     }
                 }

@@ -9,5 +9,4 @@ object TicConstants {
     const val maxVideoDurationSeconds = 30
     const val maxPhotoSizeMb = 5
     const val maxVideoSizeMb = 50
-    const val demoGmail = "enumerator.demo@tic.id"
 }

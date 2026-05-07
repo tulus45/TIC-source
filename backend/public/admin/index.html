@@ -21,6 +21,24 @@
         <button id="detailTabButton" class="tab-button" type="button" aria-selected="false">Data Registrasi</button>
       </section>
 
+      <section class="master-panel" aria-label="Pembaruan master data sekolah">
+        <div class="master-panel__intro">
+          <div class="hero__badge hero__badge--light">Master Data Sekolah</div>
+          <h2>Upload Excel untuk update cascading lokasi</h2>
+          <p>Admin cukup upload file Excel terbaru. Header kolom akan dipakai sebagai urutan cascading di aplikasi Android, jadi jumlah level bisa berubah tanpa ubah APK.</p>
+        </div>
+        <div class="master-panel__controls">
+          <label class="master-upload">
+            <span>Pilih file Excel</span>
+            <input id="masterFileInput" type="file" accept=".xlsx,.xls" />
+          </label>
+          <button id="masterUploadButton" class="button button--primary" type="button">Upload Excel</button>
+          <button id="masterRefreshButton" class="button button--secondary" type="button">Muat Info Master</button>
+        </div>
+        <div id="masterUploadStatus" class="master-panel__status">Belum ada file dipilih.</div>
+        <div id="masterDataInfo" class="master-panel__info">Memuat info master data...</div>
+      </section>
+
       <section id="detailToolbar" class="toolbar hidden">
         <label class="toolbar__field">
           <span>Status</span>

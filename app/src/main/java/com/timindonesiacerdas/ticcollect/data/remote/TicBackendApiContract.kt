@@ -7,6 +7,7 @@ import com.timindonesiacerdas.ticcollect.data.model.UserProfile
 object TicApiRoutes {
     const val verifyAuth = "/api/auth/verify"
     const val currentUser = "/api/users/me"
+    const val schoolMaster = "/api/master-data/schools"
     const val registrations = "/api/registrations"
     const val registrationStatus = "/api/registrations/status"
     const val submissions = "/api/submissions"
@@ -44,6 +45,14 @@ data class RegistrationStatusResponse(
     val updatedAt: String? = null,
 )
 
+data class SchoolMasterDataResponse(
+    val datasetId: String,
+    val title: String,
+    val columns: List<String>,
+    val rows: List<List<String>>,
+    val updatedAt: String? = null,
+)
+
 data class SubmissionUploadResponse(
     val submissionId: String,
     val driveFolderId: String? = null,
@@ -60,6 +69,7 @@ interface TicBackendApiContract {
         gmail: String? = null,
         registrationId: String? = null,
     ): UserProfile
+    suspend fun getSchoolMasterData(): SchoolMasterDataResponse
     suspend fun getRegistrationStatus(
         uid: String? = null,
         gmail: String? = null,

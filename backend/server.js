@@ -3,6 +3,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { URL } = require("node:url");
+const XLSX = require("xlsx-js-style");
 
 const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 8787);
@@ -22,6 +23,8 @@ const dataDir = resolveRuntimePath(process.env.TIC_DATA_DIR, path.join(storageRo
 const publicDir = path.join(rootDir, "public");
 const uploadsDir = resolveRuntimePath(process.env.TIC_UPLOADS_DIR, path.join(storageRoot, "uploads"));
 const registrationsFile = path.join(dataDir, "registrations.json");
+const bundledSchoolMasterFile = path.join(rootDir, "data", "school_master.json");
+const schoolMasterFile = path.join(dataDir, "school_master.json");
 
 const staticContentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -44,6 +47,27 @@ async function ensureStorage() {
   } catch {
     await fs.writeFile(registrationsFile, "[]\n", "utf8");
   }
+
+  try {
+    await fs.access(schoolMasterFile);
+  } catch {
+    try {
+      const bundledMaster = await fs.readFile(bundledSchoolMasterFile, "utf8");
+      await fs.writeFile(schoolMasterFile, bundledMaster, "utf8");
+    } catch {
+      await fs.writeFile(
+        schoolMasterFile,
+        `${JSON.stringify({
+          datasetId: "school-location-master",
+          title: "Master Lokasi Sekolah",
+          columns: [],
+          rows: [],
+          updatedAt: new Date().toISOString(),
+        }, null, 2)}\n`,
+        "utf8",
+      );
+    }
+  }
 }
 
 async function readRegistrations() {
@@ -60,6 +84,98 @@ async function writeRegistrations(items) {
     `${JSON.stringify(items, null, 2)}\n`,
     "utf8",
   );
+}
+
+async function readSchoolMaster() {
+  await ensureStorage();
+  const raw = await fs.readFile(schoolMasterFile, "utf8");
+  const parsed = JSON.parse(raw);
+  const columns = Array.isArray(parsed.columns)
+    ? parsed.columns.map((item) => normalizeString(item)).filter(Boolean)
+    : [];
+  const rows = Array.isArray(parsed.rows)
+    ? parsed.rows
+        .filter((row) => Array.isArray(row))
+        .map((row) => row.map((cell) => normalizeString(cell)))
+        .filter((row) => row.some((cell) => cell))
+    : [];
+
+  return {
+    datasetId: normalizeString(parsed.datasetId) || "school-location-master",
+    title: normalizeString(parsed.title) || "Master Lokasi Sekolah",
+    columns,
+    rows,
+    updatedAt: normalizeString(parsed.updatedAt) || null,
+  };
+}
+
+async function writeSchoolMaster(payload) {
+  await ensureStorage();
+  await fs.writeFile(
+    schoolMasterFile,
+    `${JSON.stringify(payload, null, 2)}\n`,
+    "utf8",
+  );
+}
+
+function parseSchoolMasterWorkbook(fileBuffer) {
+  const workbook = XLSX.read(fileBuffer, {
+    type: "buffer",
+    cellText: true,
+    cellDates: false,
+  });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) {
+    throw new Error("Worksheet tidak ditemukan di file Excel.");
+  }
+
+  const worksheet = workbook.Sheets[firstSheetName];
+  const matrix = XLSX.utils.sheet_to_json(worksheet, {
+    header: 1,
+    raw: false,
+    defval: "",
+    blankrows: false,
+  });
+
+  if (!Array.isArray(matrix) || matrix.length === 0) {
+    throw new Error("File Excel tidak memiliki data.");
+  }
+
+  const headerRowIndex = matrix.findIndex((row) =>
+    Array.isArray(row) && row.some((cell) => normalizeString(cell)),
+  );
+  if (headerRowIndex < 0) {
+    throw new Error("Header kolom tidak ditemukan pada file Excel.");
+  }
+
+  const headerRow = matrix[headerRowIndex];
+  const activeColumnIndexes = headerRow
+    .map((cell, index) => [normalizeString(cell), index])
+    .filter(([value]) => value)
+    .map(([, index]) => index);
+
+  if (!activeColumnIndexes.length) {
+    throw new Error("Header kolom kosong. Isi minimal 1 nama kolom di baris pertama data.");
+  }
+
+  const columns = activeColumnIndexes.map((index) => normalizeString(headerRow[index]));
+  const rows = matrix
+    .slice(headerRowIndex + 1)
+    .filter((row) => Array.isArray(row))
+    .map((row) => activeColumnIndexes.map((index) => normalizeString(row[index])))
+    .filter((row) => row.some((cell) => cell));
+
+  if (!rows.length) {
+    throw new Error("Data lokasi sekolah belum ditemukan di bawah header.");
+  }
+
+  return {
+    datasetId: "school-location-master",
+    title: "Master Lokasi Sekolah",
+    columns,
+    rows,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function sendJson(res, statusCode, payload) {
@@ -239,6 +355,12 @@ function validateAssetUploadPayload(body) {
   return null;
 }
 
+function validateSchoolMasterUploadPayload(body) {
+  if (!normalizeString(body.fileName)) return "Nama file Excel wajib dikirim.";
+  if (!normalizeString(body.base64Data)) return "Isi file Excel wajib dikirim.";
+  return null;
+}
+
 async function storeRegistrationAsset(body) {
   const uid = normalizeString(body.uid);
   const assetType = normalizeString(body.assetType).toLowerCase();
@@ -388,6 +510,57 @@ async function handleApi(req, res, url) {
     }
 
     sendJson(res, 200, toUserProfile(record));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/master-data/schools") {
+    try {
+      const masterData = await readSchoolMaster();
+      sendJson(res, 200, masterData);
+    } catch (error) {
+      sendJson(res, 500, {
+        error: "Master data sekolah belum bisa dibaca.",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/master-data/schools/upload") {
+    let body;
+    try {
+      body = await readJsonBody(req);
+    } catch (error) {
+      sendJson(res, 400, {
+        error: error instanceof Error ? error.message : "Body JSON tidak valid.",
+      });
+      return;
+    }
+
+    const validationError = validateSchoolMasterUploadPayload(body);
+    if (validationError) {
+      sendJson(res, 422, { error: validationError });
+      return;
+    }
+
+    try {
+      const workbookBuffer = Buffer.from(normalizeString(body.base64Data), "base64");
+      const parsedMasterData = parseSchoolMasterWorkbook(workbookBuffer);
+      await writeSchoolMaster(parsedMasterData);
+      sendJson(res, 200, {
+        message: "Master data sekolah berhasil diperbarui dari file Excel.",
+        datasetId: parsedMasterData.datasetId,
+        title: parsedMasterData.title,
+        columns: parsedMasterData.columns,
+        rowCount: parsedMasterData.rows.length,
+        updatedAt: parsedMasterData.updatedAt,
+      });
+    } catch (error) {
+      sendJson(res, 422, {
+        error: "File Excel belum bisa diproses sebagai master data sekolah.",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
     return;
   }
 

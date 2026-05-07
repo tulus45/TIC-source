@@ -9,7 +9,6 @@ import androidx.compose.ui.unit.dp
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
 import com.timindonesiacerdas.ticcollect.ui.components.TicPrimaryButton
 import com.timindonesiacerdas.ticcollect.ui.components.TicScreenContainer
-import com.timindonesiacerdas.ticcollect.ui.components.TicSecondaryButton
 import com.timindonesiacerdas.ticcollect.ui.components.TicSectionCard
 
 @Composable
@@ -18,7 +17,6 @@ fun WaitingApprovalScreen(
     statusSyncMessage: String?,
     isRefreshing: Boolean,
     onRefreshStatus: () -> Unit,
-    onLogout: () -> Unit,
 ) {
     TicScreenContainer(
         title = "Waiting for Approval",
@@ -46,10 +44,6 @@ fun WaitingApprovalScreen(
             text = if (isRefreshing) "Memeriksa Status..." else "Refresh Status",
             onClick = onRefreshStatus,
             enabled = !isRefreshing,
-        )
-        TicSecondaryButton(
-            text = "Logout",
-            onClick = onLogout,
         )
     }
 }

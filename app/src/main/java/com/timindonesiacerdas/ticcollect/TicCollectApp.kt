@@ -4,6 +4,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.timindonesiacerdas.ticcollect.auth.AuthViewModel
+import com.timindonesiacerdas.ticcollect.form.FormViewModel
 import com.timindonesiacerdas.ticcollect.home.HomeViewModel
 import com.timindonesiacerdas.ticcollect.navigation.TicNavGraph
 import com.timindonesiacerdas.ticcollect.registration.RegistrationViewModel
@@ -14,6 +15,7 @@ import com.timindonesiacerdas.ticcollect.upload.UploadViewModel
 fun TicCollectApp() {
     val authViewModel: AuthViewModel = viewModel()
     val registrationViewModel: RegistrationViewModel = viewModel()
+    val formViewModel: FormViewModel = viewModel()
     val homeViewModel: HomeViewModel = viewModel()
     val uploadViewModel: UploadViewModel = viewModel()
 
@@ -22,6 +24,7 @@ fun TicCollectApp() {
             TicNavGraph(
                 authViewModel = authViewModel,
                 registrationViewModel = registrationViewModel,
+                formViewModel = formViewModel,
                 homeViewModel = homeViewModel,
                 uploadViewModel = uploadViewModel,
             )

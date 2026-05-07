@@ -2,37 +2,25 @@ package com.timindonesiacerdas.ticcollect.auth
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -43,59 +31,9 @@ import com.timindonesiacerdas.ticcollect.utils.TicConstants
 
 @Composable
 fun WelcomeScreen(
-    uiState: AuthUiState,
-    onLoginClick: () -> Unit,
     onRegistrationClick: () -> Unit,
 ) {
     var hasAgreed by rememberSaveable { mutableStateOf(false) }
-
-    LaunchedEffect(uiState.session.isAuthenticated) {
-        if (!uiState.session.isAuthenticated) {
-            hasAgreed = false
-        }
-    }
-
-    if (!uiState.session.isAuthenticated) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFFF8FBFF),
-                            Color(0xFFE9F0FF),
-                            Color(0xFFF7F1EE),
-                        ),
-                    ),
-                )
-                .padding(horizontal = 24.dp, vertical = 28.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            LoginBackgroundDecoration()
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 320.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-            ) {
-                TicAppLogo(size = 184.dp)
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 3.dp,
-                    )
-                }
-                TicPrimaryButton(
-                    text = if (uiState.isLoading) "Masuk..." else "Login with Gmail",
-                    onClick = onLoginClick,
-                    enabled = !uiState.isLoading,
-                )
-            }
-        }
-        return
-    }
 
     Column(
         modifier = Modifier
@@ -201,72 +139,3 @@ private val requirementItems = listOf(
     "Setelah selesai pemasangan di tiap sekolah, tukang / pemasang wajib menyelesaikan proses laporan yang telah disediakan sesuai format, termasuk cap dan tanda tangan kepala sekolah dari tempat yang telah terpasang, serta wajib mendokumentasikannya secara lengkap untuk masuk ke tahap selanjutnya.",
     "Perhitungan keseluruhan jumlah pembayaran jasa akan dilakukan setelah semua berkas pelaporan dianggap lengkap dan telah dikumpulkan ke kantor tanpa kecuali.",
 )
-
-@Composable
-private fun LoginBackgroundDecoration() {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .size(280.dp)
-                .align(Alignment.TopStart)
-                .offset(x = (-96).dp, y = (-72).dp)
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0x55228AD6),
-                            Color(0x00228AD6),
-                        ),
-                    ),
-                    shape = CircleShape,
-                ),
-        )
-        Box(
-            modifier = Modifier
-                .size(320.dp)
-                .align(Alignment.TopEnd)
-                .offset(x = 112.dp, y = (-104).dp)
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0x55F04A56),
-                            Color(0x00F04A56),
-                        ),
-                    ),
-                    shape = CircleShape,
-                ),
-        )
-        Box(
-            modifier = Modifier
-                .size(286.dp)
-                .align(Alignment.Center)
-                .graphicsLayer {
-                    rotationZ = -16f
-                    alpha = 0.2f
-                }
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            Color.White,
-                            Color(0xFFDCE6FF),
-                        ),
-                    ),
-                    shape = RoundedCornerShape(72.dp),
-                ),
-        )
-        Box(
-            modifier = Modifier
-                .size(width = 240.dp, height = 92.dp)
-                .align(Alignment.BottomCenter)
-                .offset(y = (-32).dp)
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0x44243B6B),
-                            Color.Transparent,
-                        ),
-                    ),
-                    shape = RoundedCornerShape(999.dp),
-                ),
-        )
-    }
-}

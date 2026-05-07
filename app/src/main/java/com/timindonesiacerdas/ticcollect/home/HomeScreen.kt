@@ -25,10 +25,12 @@ fun HomeScreen(
     onPendingUpload: () -> Unit,
     onHistory: () -> Unit,
     onProfile: () -> Unit,
-    onLogout: () -> Unit,
 ) {
     val user = uiState.session.user
     val displayedEmail = uiState.session.profile?.gmail ?: user?.gmail.orEmpty()
+    val displayName = uiState.session.profile?.nama
+        ?.takeIf { it.isNotBlank() }
+        ?: "Enumerator"
 
     Column(
         modifier = Modifier
@@ -48,7 +50,7 @@ fun HomeScreen(
             ) {
                 TicStatusPill(status = RegistrationStatus.APPROVED)
                 Text(
-                    text = "Welcome, ${user?.displayName ?: "Enumerator"}",
+                    text = "Welcome, $displayName",
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -85,15 +87,9 @@ fun HomeScreen(
         )
         TicMenuCard(
             title = "Profile",
-            description = "Lihat identitas akun, status registrasi, dan info perangkat.",
+            description = "Lihat identitas registrasi dan info perangkat.",
             actionLabel = "Buka",
             onActionClick = onProfile,
-        )
-        TicMenuCard(
-            title = "Logout",
-            description = "Keluar dari sesi demo saat ini.",
-            actionLabel = "Keluar",
-            onActionClick = onLogout,
         )
     }
 }

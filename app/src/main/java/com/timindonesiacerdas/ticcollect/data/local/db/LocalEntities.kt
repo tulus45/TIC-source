@@ -48,13 +48,12 @@ data class RegistrationDraftEntity(
 
 fun SessionEntity.toAuthenticatedUser(): AuthenticatedUser? {
     val safeUid = uid.orEmpty()
-    val safeGmail = gmail.orEmpty()
     val safeDisplayName = displayName.orEmpty()
-    if (!isAuthenticated || safeUid.isBlank() || safeGmail.isBlank()) return null
+    if (!isAuthenticated || safeUid.isBlank()) return null
 
     return AuthenticatedUser(
         uid = safeUid,
-        gmail = safeGmail,
+        gmail = gmail.orEmpty(),
         displayName = safeDisplayName,
         photoUrl = photoUrl,
         firebaseIdToken = firebaseIdToken,

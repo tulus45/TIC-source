@@ -86,23 +86,16 @@ class RegistrationViewModel(
 
                 _uiState.update { current ->
                     if (user == null) {
-                        RegistrationUiState()
+                        current
                     } else {
                         current.copy(
                             uid = user.uid,
                             gmail = current.gmail.ifBlank {
                                 draft?.gmail ?: profile?.gmail ?: user.gmail
                             },
-                            displayName = user.displayName,
+                            displayName = draft?.displayName ?: profile?.displayName.orEmpty(),
                             nik = current.nik.ifBlank { draft?.nik ?: profile?.nik.orEmpty() },
-                            nama = current.nama.ifBlank {
-                                preferredRegistrationName(
-                                    draftName = draft?.nama,
-                                    profileName = profile?.nama,
-                                    loginDisplayName = user.displayName,
-                                    status = resolvedStatus,
-                                )
-                            },
+                            nama = current.nama.ifBlank { draft?.nama ?: profile?.nama.orEmpty() },
                             alamat = current.alamat.ifBlank { draft?.alamat ?: profile?.alamat.orEmpty() },
                             noHp = current.noHp.ifBlank { draft?.noHp ?: profile?.noHp.orEmpty() },
                             noRekening = current.noRekening.ifBlank { draft?.noRekening ?: profile?.noRekening.orEmpty() },
@@ -170,11 +163,6 @@ class RegistrationViewModel(
         _uiState.update {
             it.copy(
                 ktpLocalPath = path,
-                nama = clearLoginNamePlaceholder(
-                    value = it.nama,
-                    loginDisplayName = it.displayName,
-                    status = it.currentStatus,
-                ),
                 errorMessage = null,
                 isKtpOcrProcessing = true,
                 ktpOcrMessage = "Membaca data KTP...",
@@ -206,7 +194,7 @@ class RegistrationViewModel(
             val draft = RegistrationDraft(
                 uid = current.uid,
                 gmail = current.gmail.trim(),
-                displayName = current.displayName,
+                displayName = current.nama.trim(),
                 nik = current.nik.trim(),
                 nama = current.nama.trim(),
                 alamat = current.alamat.trim(),
@@ -272,7 +260,7 @@ class RegistrationViewModel(
 
     fun refreshRegistrationStatus(showFailureMessage: Boolean = true) {
         val current = _uiState.value
-        if (!current.isAuthenticated || current.uid.isBlank()) return
+        if (current.uid.isBlank()) return
         if (current.isRefreshingStatus) return
         val previousSyncMessage = current.statusSyncMessage
 
@@ -329,7 +317,6 @@ class RegistrationViewModel(
     }
 
     private fun validate(state: RegistrationUiState): String? {
-        if (!state.isAuthenticated) return "Login Gmail diperlukan sebelum registrasi."
         if (state.gmail.isBlank()) return "Email wajib diisi."
         if (state.nik.length < 8) return "NIK minimal 8 digit untuk dummy tahap 1."
         if (state.nama.isBlank()) return "Nama wajib diisi."
@@ -346,14 +333,14 @@ class RegistrationViewModel(
 
     private fun persistWorkingDraft() {
         val current = _uiState.value
-        if (!current.isAuthenticated || current.uid.isBlank()) return
+        if (current.uid.isBlank()) return
 
         val existingDraft = InMemorySessionStore.currentRegistrationDraft.value
         val now = TimeFormatter.nowStorage()
         val localDraft = LocalRegistrationDraft(
             uid = current.uid,
             gmail = current.gmail.trim(),
-            displayName = current.displayName,
+            displayName = current.nama.trim(),
             nik = current.nik.trim(),
             nama = current.nama.trim(),
             alamat = current.alamat.trim(),
@@ -430,42 +417,6 @@ class RegistrationViewModel(
                 }
                 persistWorkingDraft()
             }
-    }
-
-    private fun preferredRegistrationName(
-        draftName: String?,
-        profileName: String?,
-        loginDisplayName: String,
-        status: RegistrationStatus?,
-    ): String {
-        val candidate = listOf(draftName, profileName)
-            .firstOrNull { !it.isNullOrBlank() }
-            .orEmpty()
-            .trim()
-
-        return clearLoginNamePlaceholder(
-            value = candidate,
-            loginDisplayName = loginDisplayName,
-            status = status,
-        )
-    }
-
-    private fun clearLoginNamePlaceholder(
-        value: String,
-        loginDisplayName: String,
-        status: RegistrationStatus?,
-    ): String {
-        val normalizedValue = value.trim()
-        if (normalizedValue.isBlank()) return ""
-
-        return if (
-            normalizedValue.equals(loginDisplayName.trim(), ignoreCase = true) &&
-            (status == null || status == RegistrationStatus.NOT_REGISTERED)
-        ) {
-            ""
-        } else {
-            normalizedValue
-        }
     }
 
     private fun registrationStatusFromServer(value: String): RegistrationStatus =

@@ -2,9 +2,9 @@ package com.timindonesiacerdas.ticcollect.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.timindonesiacerdas.ticcollect.data.local.InMemorySessionStore
 import com.timindonesiacerdas.ticcollect.data.model.SessionState
 import com.timindonesiacerdas.ticcollect.data.model.SubmissionStatus
+import com.timindonesiacerdas.ticcollect.data.local.InMemorySessionStore
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -36,7 +36,4 @@ class HomeViewModel : ViewModel() {
         initialValue = HomeUiState(),
     )
 
-    fun logout() {
-        InMemorySessionStore.logout()
-    }
 }

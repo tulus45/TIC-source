@@ -123,6 +123,81 @@ body {
   margin-top: 18px;
 }
 
+.master-panel {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+}
+
+.master-panel__intro h2 {
+  margin: 10px 0 8px;
+  font-size: 1.25rem;
+}
+
+.master-panel__intro p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.hero__badge--light {
+  background: rgba(13, 94, 166, 0.12);
+  color: var(--primary);
+}
+
+.master-panel__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+
+.master-upload {
+  display: grid;
+  gap: 8px;
+  min-width: 280px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.master-upload input[type="file"] {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-strong);
+  color: var(--text);
+  font: inherit;
+}
+
+.master-panel__status,
+.master-panel__info {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.master-panel__status[data-state="dirty"] {
+  color: var(--warning);
+}
+
+.master-panel__status[data-state="saving"] {
+  color: var(--primary);
+}
+
+.master-panel__status[data-state="saved"] {
+  color: var(--success);
+}
+
+.master-panel__status[data-state="error"] {
+  color: var(--danger);
+}
+
 .tab-button {
   appearance: none;
   border: 1px solid rgba(13, 94, 166, 0.14);
@@ -385,6 +460,11 @@ body {
   color: var(--primary);
 }
 
+.button--primary {
+  background: linear-gradient(135deg, rgba(13, 94, 166, 0.96), rgba(22, 111, 194, 0.88));
+  color: white;
+}
+
 .button--approve {
   background: rgba(35, 122, 87, 0.12);
   color: var(--success);
@@ -412,7 +492,8 @@ body {
   }
 
   .hero,
-  .toolbar {
+  .toolbar,
+  .master-panel {
     padding: 18px;
     border-radius: 22px;
   }

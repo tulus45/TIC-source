@@ -8,14 +8,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import com.timindonesiacerdas.ticcollect.ui.components.TicPrimaryButton
 import com.timindonesiacerdas.ticcollect.ui.components.TicScreenContainer
-import com.timindonesiacerdas.ticcollect.ui.components.TicSecondaryButton
 import com.timindonesiacerdas.ticcollect.ui.components.TicSectionCard
 
 @Composable
 fun RejectedScreen(
     rejectionReason: String?,
     onEditRegistration: () -> Unit,
-    onLogout: () -> Unit,
 ) {
     TicScreenContainer(
         title = "Registration Rejected",
@@ -36,10 +34,6 @@ fun RejectedScreen(
         TicPrimaryButton(
             text = "Perbaiki Registrasi",
             onClick = onEditRegistration,
-        )
-        TicSecondaryButton(
-            text = "Logout",
-            onClick = onLogout,
         )
     }
 }
