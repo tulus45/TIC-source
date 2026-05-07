@@ -1,0 +1,29 @@
+# Android / Gradle
+.gradle/
+.gradle-user/
+.android-user/
+build/
+app/build/
+local.properties
+*.iml
+
+# IDE
+.idea/
+
+# Backend runtime data
+backend/node_modules/
+backend/data/
+backend/uploads/
+backend/storage/
+backend/.env
+backend/.env.*
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db

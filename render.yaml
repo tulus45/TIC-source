@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: tic-registration-backend
+    runtime: node
+    region: singapore
+    plan: starter
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeployTrigger: commit
+    healthCheckPath: /api/health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      - key: TIC_STORAGE_ROOT
+        value: /opt/render/project/src/backend/storage
+    disk:
+      name: tic-registration-storage
+      mountPath: /opt/render/project/src/backend/storage
+      sizeGB: 5

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <application
+        android:name=".TicCollectApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/tic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/tic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.TICCollect"
+        android:usesCleartextTraffic="${usesCleartextTraffic}">
+        <activity
+            android:name="com.timindonesiacerdas.ticcollect.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.TICCollect">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TIC Registration Admin</title>
+    <link rel="stylesheet" href="/admin/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero__badge">TIC Admin</div>
+        <h1>Review Registrasi Teknisi</h1>
+        <p>Dashboard ringan untuk melihat data registrasi masuk dan memberi keputusan approve atau reject.</p>
+      </header>
+
+      <section id="errorBanner" class="banner banner--error hidden"></section>
+
+      <section class="tabs" aria-label="Navigasi admin">
+        <button id="summaryTabButton" class="tab-button" type="button" aria-selected="true">Summary Registrasi</button>
+        <button id="detailTabButton" class="tab-button" type="button" aria-selected="false">Data Registrasi</button>
+      </section>
+
+      <section id="detailToolbar" class="toolbar hidden">
+        <label class="toolbar__field">
+          <span>Status</span>
+          <select id="statusFilter">
+            <option value="">Semua</option>
+            <option value="PENDING">Pending</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+          </select>
+        </label>
+        <button id="exportButton" class="button button--secondary">Export Excel</button>
+        <div id="summaryText" class="toolbar__summary">Memuat data...</div>
+      </section>
+
+      <section id="detailPanel" class="table-panel hidden">
+        <div id="tableScroll" class="table-scroll">
+          <table class="registrations-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>ID Reg</th>
+                <th>UID</th>
+                <th>Gmail</th>
+                <th>Nama</th>
+                <th>NIK</th>
+                <th>Alamat</th>
+                <th>No HP</th>
+                <th>No Rekening</th>
+                <th>Nama Bank</th>
+                <th>Nama Pemilik</th>
+                <th>Area Kerja</th>
+                <th>KTP</th>
+                <th>Selfie</th>
+                <th>Dibuat</th>
+                <th>Update</th>
+                <th>Catatan</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+
+        <div id="emptyState" class="empty-state hidden">Belum ada data registrasi yang masuk.</div>
+      </section>
+
+      <section id="summaryPanel" class="table-panel">
+        <div class="summary-note">Ringkasan ini menghitung seluruh data registrasi per area kerja.</div>
+        <div id="summaryScroll" class="table-scroll">
+          <table class="registrations-table registrations-table--summary">
+            <thead>
+              <tr>
+                <th>Area Kerja</th>
+                <th>Pending</th>
+                <th>Approved</th>
+                <th>Rejected</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody id="summaryBody"></tbody>
+          </table>
+        </div>
+
+        <div id="summaryEmptyState" class="empty-state hidden">Belum ada data registrasi untuk diringkas.</div>
+      </section>
+
+      <template id="rowTemplate">
+        <tr>
+          <td><span class="status-pill"></span></td>
+          <td class="cell-code row-registration-id"></td>
+          <td class="cell-code row-uid"></td>
+          <td class="cell-wrap row-gmail"></td>
+          <td class="cell-wrap row-name"></td>
+          <td class="cell-code row-nik"></td>
+          <td class="cell-wrap row-alamat"></td>
+          <td class="cell-nowrap row-nohp"></td>
+          <td class="cell-code row-rekening"></td>
+          <td class="cell-wrap row-bank"></td>
+          <td class="cell-wrap row-pemilik"></td>
+          <td class="cell-wrap row-area"></td>
+          <td>
+            <a class="asset-link row-ktp-link" href="#" target="_blank" rel="noreferrer noopener">
+              <img class="asset-thumb row-ktp-thumb hidden" alt="Preview KTP" />
+              <span class="asset-text row-ktp-text"></span>
+            </a>
+          </td>
+          <td>
+            <a class="asset-link row-selfie-link" href="#" target="_blank" rel="noreferrer noopener">
+              <img class="asset-thumb row-selfie-thumb hidden" alt="Preview Selfie" />
+              <span class="asset-text row-selfie-text"></span>
+            </a>
+          </td>
+          <td class="cell-nowrap row-created"></td>
+          <td class="cell-nowrap row-updated"></td>
+          <td>
+            <div class="note-editor">
+              <textarea class="note-input row-note-input" placeholder="Isi catatan admin atau alasan reject"></textarea>
+              <div class="note-editor__footer">
+                <button class="button button--secondary button--tiny row-note-save">Simpan Catatan</button>
+                <span class="note-status row-note-status"></span>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div class="table-actions">
+              <button class="button button--approve button--small">Approve</button>
+              <button class="button button--reject button--small">Reject</button>
+            </div>
+          </td>
+        </tr>
+      </template>
+    </div>
+
+    <script src="/admin/app.js"></script>
+  </body>
+</html>
