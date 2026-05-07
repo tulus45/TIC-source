@@ -2,7 +2,6 @@ package com.timindonesiacerdas.ticcollect.home
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
@@ -51,11 +50,6 @@ fun ProfileScreen(
                 Text(text = "Nama Bank: ${profile?.namaBank.orEmpty()}")
                 Text(text = "Nama Pemilik: ${profile?.namaPemilik.orEmpty()}")
                 Text(text = "Area Kerja: ${profile?.areaKerja.orEmpty()}")
-                Text(
-                    text = "Catatan keamanan: NIK penuh tidak ditampilkan di profile screen untuk mengurangi risiko paparan.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                )
             }
         }
     }

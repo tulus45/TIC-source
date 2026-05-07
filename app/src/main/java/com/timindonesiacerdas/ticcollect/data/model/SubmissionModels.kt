@@ -35,6 +35,7 @@ data class SubmissionRecord(
     val submissionId: String,
     val uid: String,
     val gmail: String,
+    val nama: String = "",
     val projectName: String,
     val formName: String,
     val answersJson: String,

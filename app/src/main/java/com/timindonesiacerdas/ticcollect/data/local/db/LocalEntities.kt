@@ -137,8 +137,8 @@ fun LocalRegistrationDraft.toEntity(): RegistrationDraftEntity = RegistrationDra
 )
 
 fun RegistrationDraft.toLocalDraft(
-    createdAt: String = this.createdAt,
-    updatedAt: String = this.updatedAt,
+    createdAt: String? = null,
+    updatedAt: String? = null,
 ): LocalRegistrationDraft = LocalRegistrationDraft(
     uid = uid,
     gmail = gmail,
@@ -161,8 +161,8 @@ fun RegistrationDraft.toLocalDraft(
     selfieDriveFileId = selfieDriveFileId,
     status = status,
     rejectionReason = rejectionReason,
-    createdAt = createdAt,
-    updatedAt = updatedAt,
+    createdAt = createdAt ?: this.createdAt,
+    updatedAt = updatedAt ?: this.updatedAt,
 )
 
 private fun registrationStatusFromStorage(value: String): RegistrationStatus =

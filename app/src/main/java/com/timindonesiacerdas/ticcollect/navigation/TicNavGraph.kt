@@ -7,17 +7,26 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.timindonesiacerdas.ticcollect.auth.*
+import com.timindonesiacerdas.ticcollect.auth.AuthViewModel
+import com.timindonesiacerdas.ticcollect.auth.WelcomeScreen
 import com.timindonesiacerdas.ticcollect.camera.KtpCameraScreen
 import com.timindonesiacerdas.ticcollect.camera.SelfieCameraScreen
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
 import com.timindonesiacerdas.ticcollect.form.EvidenceWorkflowScreen
 import com.timindonesiacerdas.ticcollect.form.FormScreen
 import com.timindonesiacerdas.ticcollect.form.FormViewModel
-import com.timindonesiacerdas.ticcollect.home.*
-import com.timindonesiacerdas.ticcollect.registration.*
+import com.timindonesiacerdas.ticcollect.home.DraftScreen
+import com.timindonesiacerdas.ticcollect.home.HomeScreen
+import com.timindonesiacerdas.ticcollect.home.HomeViewModel
+import com.timindonesiacerdas.ticcollect.home.ProfileScreen
+import com.timindonesiacerdas.ticcollect.registration.RegistrationScreen
+import com.timindonesiacerdas.ticcollect.registration.RegistrationViewModel
+import com.timindonesiacerdas.ticcollect.registration.RejectedScreen
+import com.timindonesiacerdas.ticcollect.registration.SuspendedScreen
+import com.timindonesiacerdas.ticcollect.registration.WaitingApprovalScreen
 import com.timindonesiacerdas.ticcollect.splash.SplashScreen
-import com.timindonesiacerdas.ticcollect.upload.*
+import com.timindonesiacerdas.ticcollect.upload.PendingUploadScreen
+import com.timindonesiacerdas.ticcollect.upload.UploadViewModel
 
 @Composable
 fun TicNavGraph(
@@ -180,9 +189,12 @@ fun TicNavGraph(
             )
             HomeScreen(
                 uiState = homeUiState,
-                onStartDataCollection = { navController.navigate(TicRoutes.Form) },
+                onStartDataCollection = {
+                    formViewModel.startNewSubmission()
+                    navController.navigate(TicRoutes.Form)
+                },
                 onPendingUpload = { navController.navigate(TicRoutes.PendingUpload) },
-                onHistory = { navController.navigate(TicRoutes.SubmissionHistory) },
+                onDraft = { navController.navigate(TicRoutes.Draft) },
                 onProfile = { navController.navigate(TicRoutes.Profile) },
             )
         }
@@ -196,10 +208,7 @@ fun TicNavGraph(
             FormScreen(
                 uiState = formUiState,
                 onBack = { navController.popBackStack() },
-                onNext = {
-                    formViewModel.resetEvidenceProgress()
-                    navController.navigate(TicRoutes.EvidenceWorkflow)
-                },
+                onNext = { navController.navigate(TicRoutes.EvidenceWorkflow) },
                 onRetryLoadMasterData = { formViewModel.loadMasterData(force = true) },
                 onSelectValue = formViewModel::selectValue,
                 onClearSelections = formViewModel::clearSelections,
@@ -218,8 +227,18 @@ fun TicNavGraph(
                 onPreviousStep = formViewModel::goToPreviousEvidenceStep,
                 onNextStep = formViewModel::goToNextEvidenceStep,
                 onFinish = {
+                    val wasEditingSubmission = formUiState.editingSubmissionId != null
                     formViewModel.completeSubmission()
-                    navController.navigateClearingBackStack(TicRoutes.PendingUpload)
+                    if (wasEditingSubmission) {
+                        navController.navigate(TicRoutes.Draft) {
+                            popUpTo(TicRoutes.Draft) {
+                                inclusive = false
+                            }
+                            launchSingleTop = true
+                        }
+                    } else {
+                        navController.navigateClearingBackStack(TicRoutes.PendingUpload)
+                    }
                 },
                 onPhotoRecorded = formViewModel::recordPhotoCapture,
                 onPhotoCleared = formViewModel::clearPhotoCapture,
@@ -241,14 +260,20 @@ fun TicNavGraph(
             )
         }
 
-        composable(TicRoutes.SubmissionHistory) {
+        composable(TicRoutes.Draft) {
             ProtectedRouteGuard(
                 navController = navController,
                 status = authUiState.session.profile?.status,
                 onRefreshStatus = authViewModel::refreshAccessStatus,
             )
-            SubmissionHistoryScreen(
+            DraftScreen(
+                items = pendingUploadUiState.items,
                 onBack = { navController.popBackStack() },
+                onEdit = { submissionId ->
+                    formViewModel.startEditingSubmission(submissionId)
+                    navController.navigate(TicRoutes.Form)
+                },
+                onDelete = uploadViewModel::deleteSubmission,
             )
         }
 
