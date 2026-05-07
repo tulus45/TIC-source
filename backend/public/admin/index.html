@@ -20,6 +20,7 @@
         <button id="summaryTabButton" class="tab-button" type="button" aria-selected="true">Summary Registrasi</button>
         <button id="detailTabButton" class="tab-button" type="button" aria-selected="false">Data Registrasi</button>
         <button id="uploadSummaryTabButton" class="tab-button" type="button" aria-selected="false">Summary Upload Data</button>
+        <button id="uploadBreakdownTabButton" class="tab-button" type="button" aria-selected="false">Breakdown List Sekolah</button>
         <button id="uploadRawTabButton" class="tab-button" type="button" aria-selected="false">Raw Data Upload</button>
         <button id="masterTabButton" class="tab-button" type="button" aria-selected="false">Master Data Sekolah</button>
       </section>
@@ -127,6 +128,39 @@
         </div>
 
         <div id="uploadSummaryEmptyState" class="empty-state hidden">Belum ada data upload yang masuk.</div>
+      </section>
+
+      <section id="uploadBreakdownToolbar" class="toolbar hidden">
+        <label class="toolbar__field">
+          <span>Kabupaten</span>
+          <select id="breakdownKabupatenFilter">
+            <option value="">Semua Kabupaten</option>
+          </select>
+        </label>
+        <label class="toolbar__field">
+          <span>Status</span>
+          <select id="breakdownStatusFilter">
+            <option value="">Semua Status</option>
+            <option value="DONE">Done</option>
+            <option value="PENDING">Pending</option>
+          </select>
+        </label>
+        <label class="toolbar__field toolbar__field--search">
+          <span>Search</span>
+          <input id="breakdownSearchInput" type="search" placeholder="Cari sekolah, kecamatan, kelurahan..." />
+        </label>
+        <div id="breakdownSummaryText" class="toolbar__summary">Memuat daftar sekolah...</div>
+      </section>
+
+      <section id="uploadBreakdownPanel" class="table-panel hidden">
+        <div id="uploadBreakdownScroll" class="table-scroll">
+          <table id="uploadBreakdownTable" class="registrations-table">
+            <thead id="uploadBreakdownHead"></thead>
+            <tbody id="uploadBreakdownBody"></tbody>
+          </table>
+        </div>
+
+        <div id="uploadBreakdownEmptyState" class="empty-state hidden">Belum ada master data sekolah untuk ditampilkan.</div>
       </section>
 
       <section id="uploadRawPanel" class="table-panel hidden">

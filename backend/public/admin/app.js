@@ -9,6 +9,7 @@ const statusFilter = document.getElementById("statusFilter");
 const detailTabButton = document.getElementById("detailTabButton");
 const summaryTabButton = document.getElementById("summaryTabButton");
 const uploadSummaryTabButton = document.getElementById("uploadSummaryTabButton");
+const uploadBreakdownTabButton = document.getElementById("uploadBreakdownTabButton");
 const uploadRawTabButton = document.getElementById("uploadRawTabButton");
 const masterTabButton = document.getElementById("masterTabButton");
 const detailPanel = document.getElementById("detailPanel");
@@ -20,6 +21,16 @@ const uploadSummaryPanel = document.getElementById("uploadSummaryPanel");
 const uploadSummaryScroll = document.getElementById("uploadSummaryScroll");
 const uploadSummaryBody = document.getElementById("uploadSummaryBody");
 const uploadSummaryEmptyState = document.getElementById("uploadSummaryEmptyState");
+const uploadBreakdownToolbar = document.getElementById("uploadBreakdownToolbar");
+const breakdownKabupatenFilter = document.getElementById("breakdownKabupatenFilter");
+const breakdownStatusFilter = document.getElementById("breakdownStatusFilter");
+const breakdownSearchInput = document.getElementById("breakdownSearchInput");
+const breakdownSummaryText = document.getElementById("breakdownSummaryText");
+const uploadBreakdownPanel = document.getElementById("uploadBreakdownPanel");
+const uploadBreakdownScroll = document.getElementById("uploadBreakdownScroll");
+const uploadBreakdownHead = document.getElementById("uploadBreakdownHead");
+const uploadBreakdownBody = document.getElementById("uploadBreakdownBody");
+const uploadBreakdownEmptyState = document.getElementById("uploadBreakdownEmptyState");
 const uploadRawPanel = document.getElementById("uploadRawPanel");
 const uploadTableScroll = document.getElementById("uploadTableScroll");
 const uploadTableHead = document.getElementById("uploadTableHead");
@@ -35,6 +46,7 @@ const template = document.getElementById("rowTemplate");
 let currentItems = [];
 let summaryItems = [];
 let uploadItems = [];
+let breakdownRows = [];
 let activeTab = "summary-registrations";
 let currentMasterData = null;
 
@@ -94,10 +106,12 @@ async function loadSubmissions() {
     uploadItems = Array.isArray(payload.items) ? payload.items : [];
     renderSubmissionRows(uploadItems);
     renderSubmissionSummary(uploadItems);
+    refreshSubmissionBreakdown();
   } catch (error) {
     uploadItems = [];
     renderSubmissionRows([]);
     renderSubmissionSummary([]);
+    refreshSubmissionBreakdown();
     showError(error.message || "Gagal memuat data upload.");
   } finally {
     updateExportButtonState();
@@ -124,12 +138,14 @@ async function loadMasterDataInfo() {
     ].join(" | ");
     renderSubmissionSummary(uploadItems);
     renderSubmissionRows(uploadItems);
+    refreshSubmissionBreakdown();
   } catch (error) {
     currentMasterData = null;
     masterDataInfo.textContent = error.message || "Belum bisa memuat info master data.";
     showError(error.message || "Belum bisa memuat info master data.");
     renderSubmissionSummary(uploadItems);
     renderSubmissionRows(uploadItems);
+    refreshSubmissionBreakdown();
   }
 }
 
@@ -420,6 +436,54 @@ function renderSubmissionSummary(items) {
   uploadSummaryBody.appendChild(totalRow);
 }
 
+function refreshSubmissionBreakdown() {
+  breakdownRows = buildSubmissionBreakdownRows();
+  populateBreakdownKabupatenOptions(breakdownRows);
+  renderSubmissionBreakdown(breakdownRows);
+}
+
+function renderSubmissionBreakdown(rows) {
+  uploadBreakdownHead.innerHTML = "";
+  uploadBreakdownBody.innerHTML = "";
+
+  if (!rows.length) {
+    uploadBreakdownScroll.classList.add("hidden");
+    uploadBreakdownEmptyState.classList.remove("hidden");
+    breakdownSummaryText.textContent = "Belum ada master data sekolah untuk diringkas.";
+    return;
+  }
+
+  const filteredRows = filterSubmissionBreakdownRows(rows);
+  const locationColumns = Array.isArray(currentMasterData?.columns) ? currentMasterData.columns : [];
+  const headerColumns = [...locationColumns, "Status"];
+
+  const headerRow = document.createElement("tr");
+  headerRow.innerHTML = headerColumns
+    .map((column) => `<th>${escapeHtml(column)}</th>`)
+    .join("");
+  uploadBreakdownHead.appendChild(headerRow);
+
+  if (!filteredRows.length) {
+    uploadBreakdownScroll.classList.add("hidden");
+    uploadBreakdownEmptyState.classList.remove("hidden");
+    breakdownSummaryText.textContent = "Tidak ada sekolah yang cocok dengan filter atau pencarian.";
+    return;
+  }
+
+  uploadBreakdownScroll.classList.remove("hidden");
+  uploadBreakdownEmptyState.classList.add("hidden");
+  breakdownSummaryText.textContent = `${filteredRows.length} dari ${rows.length} sekolah tampil`;
+
+  filteredRows.forEach((row) => {
+    const tr = document.createElement("tr");
+    locationColumns.forEach((column) => {
+      tr.appendChild(createTextCell(row.values[column], "cell-wrap"));
+    });
+    tr.appendChild(createStatusCell(row.status));
+    uploadBreakdownBody.appendChild(tr);
+  });
+}
+
 async function saveNote(item, noteInput, noteStatus, noteSaveButton, updatedCell) {
   const adminNote = noteInput.value.trim();
   setNoteStatus(noteStatus, "Menyimpan...", "saving");
@@ -505,7 +569,7 @@ function updateExportButtonState(isLoading = false) {
     ? currentItems.length > 0
     : activeTab === "summary-registrations"
       ? summaryItems.length > 0
-      : activeTab === "summary-submissions" || activeTab === "detail-submissions"
+      : activeTab === "summary-submissions" || activeTab === "detail-submissions" || activeTab === "breakdown-submissions"
         ? uploadItems.length > 0
         : false;
   exportButton.disabled = isLoading || !hasRows;
@@ -798,11 +862,100 @@ function buildSubmissionSummary(items) {
   return { rows, totals };
 }
 
+function buildSubmissionBreakdownRows() {
+  const columns = Array.isArray(currentMasterData?.columns) ? currentMasterData.columns : [];
+  const rows = Array.isArray(currentMasterData?.rows) ? currentMasterData.rows : [];
+  if (!columns.length || !rows.length) {
+    return [];
+  }
+
+  const { schoolColumn } = getMasterColumnHints();
+  const schoolIndex = columns.indexOf(schoolColumn);
+  const completedSchools = new Set();
+
+  uploadItems.forEach((item) => {
+    if (String(item.status || "").toUpperCase() !== "UPLOADED") {
+      return;
+    }
+
+    const parsed = parseSubmissionAnswers(item);
+    const schoolName = String(parsed.selectedLocation[schoolColumn] || item.formName || "").trim();
+    if (schoolName) {
+      completedSchools.add(normalizeSearchValue(schoolName));
+    }
+  });
+
+  return rows
+    .filter((row) => Array.isArray(row) && row.some((cell) => String(cell || "").trim()))
+    .map((row, index) => {
+      const values = {};
+      columns.forEach((column, columnIndex) => {
+        values[column] = String(row?.[columnIndex] || "").trim();
+      });
+
+      const schoolName = String(row?.[schoolIndex] || "").trim();
+      const status = completedSchools.has(normalizeSearchValue(schoolName)) ? "DONE" : "PENDING";
+
+      return {
+        id: `${index}-${schoolName}`,
+        values,
+        status,
+      };
+    });
+}
+
 function getMasterColumnHints() {
   const columns = Array.isArray(currentMasterData?.columns) ? currentMasterData.columns : [];
   const kabupatenColumn = columns.find((column) => /kab/i.test(column)) || columns[0] || "Kabupaten";
   const schoolColumn = columns.find((column) => /sekolah/i.test(column)) || columns[columns.length - 1] || "Nama Sekolah";
   return { kabupatenColumn, schoolColumn };
+}
+
+function populateBreakdownKabupatenOptions(rows) {
+  const { kabupatenColumn } = getMasterColumnHints();
+  const currentValue = breakdownKabupatenFilter.value;
+  const kabupatenValues = Array.from(
+    new Set(
+      rows
+        .map((row) => row.values[kabupatenColumn] || "Belum diisi")
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => a.localeCompare(b, "id"));
+
+  breakdownKabupatenFilter.innerHTML = [
+    '<option value="">Semua Kabupaten</option>',
+    ...kabupatenValues.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`),
+  ].join("");
+
+  breakdownKabupatenFilter.value = kabupatenValues.includes(currentValue) ? currentValue : "";
+}
+
+function filterSubmissionBreakdownRows(rows) {
+  const { kabupatenColumn } = getMasterColumnHints();
+  const selectedKabupaten = breakdownKabupatenFilter.value.trim();
+  const selectedStatus = breakdownStatusFilter.value.trim().toUpperCase();
+  const searchTerm = normalizeSearchValue(breakdownSearchInput.value);
+
+  return rows.filter((row) => {
+    const kabupatenValue = String(row.values[kabupatenColumn] || "Belum diisi").trim();
+    if (selectedKabupaten && kabupatenValue !== selectedKabupaten) {
+      return false;
+    }
+
+    if (selectedStatus && row.status !== selectedStatus) {
+      return false;
+    }
+
+    if (!searchTerm) {
+      return true;
+    }
+
+    const haystack = normalizeSearchValue(
+      [...Object.values(row.values), row.status]
+        .join(" "),
+    );
+    return haystack.includes(searchTerm);
+  });
 }
 
 function getSubmissionLocationColumns(items) {
@@ -890,17 +1043,25 @@ function createStatusCell(status) {
   return td;
 }
 
+function normalizeSearchValue(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
 function setActiveTab(tab) {
   activeTab = tab;
   const showRegistrationSummary = tab === "summary-registrations";
   const showRegistrationDetail = tab === "detail-registrations";
   const showUploadSummary = tab === "summary-submissions";
+  const showUploadBreakdown = tab === "breakdown-submissions";
   const showUploadRaw = tab === "detail-submissions";
   const showMasterPanel = tab === "master-data";
 
   summaryTabButton.setAttribute("aria-selected", showRegistrationSummary ? "true" : "false");
   detailTabButton.setAttribute("aria-selected", showRegistrationDetail ? "true" : "false");
   uploadSummaryTabButton.setAttribute("aria-selected", showUploadSummary ? "true" : "false");
+  uploadBreakdownTabButton.setAttribute("aria-selected", showUploadBreakdown ? "true" : "false");
   uploadRawTabButton.setAttribute("aria-selected", showUploadRaw ? "true" : "false");
   masterTabButton.setAttribute("aria-selected", showMasterPanel ? "true" : "false");
 
@@ -908,6 +1069,8 @@ function setActiveTab(tab) {
   summaryPanel.classList.toggle("hidden", !showRegistrationSummary);
   detailPanel.classList.toggle("hidden", !showRegistrationDetail);
   uploadSummaryPanel.classList.toggle("hidden", !showUploadSummary);
+  uploadBreakdownToolbar.classList.toggle("hidden", !showUploadBreakdown);
+  uploadBreakdownPanel.classList.toggle("hidden", !showUploadBreakdown);
   uploadRawPanel.classList.toggle("hidden", !showUploadRaw);
   masterPanel.classList.toggle("hidden", !showMasterPanel);
   updateExportButtonState();
@@ -988,8 +1151,12 @@ exportButton.addEventListener("click", exportToExcel);
 summaryTabButton.addEventListener("click", () => setActiveTab("summary-registrations"));
 detailTabButton.addEventListener("click", () => setActiveTab("detail-registrations"));
 uploadSummaryTabButton.addEventListener("click", () => setActiveTab("summary-submissions"));
+uploadBreakdownTabButton.addEventListener("click", () => setActiveTab("breakdown-submissions"));
 uploadRawTabButton.addEventListener("click", () => setActiveTab("detail-submissions"));
 masterTabButton.addEventListener("click", () => setActiveTab("master-data"));
+breakdownKabupatenFilter.addEventListener("change", () => renderSubmissionBreakdown(breakdownRows));
+breakdownStatusFilter.addEventListener("change", () => renderSubmissionBreakdown(breakdownRows));
+breakdownSearchInput.addEventListener("input", () => renderSubmissionBreakdown(breakdownRows));
 masterUploadButton.addEventListener("click", uploadMasterDataExcel);
 masterRefreshButton.addEventListener("click", loadMasterDataInfo);
 masterFileInput.addEventListener("change", () => {
