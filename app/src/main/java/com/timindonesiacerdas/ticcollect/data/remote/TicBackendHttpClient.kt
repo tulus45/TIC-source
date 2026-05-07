@@ -33,7 +33,6 @@ object TicBackendHttpClient : TicBackendApiContract {
     private val candidateBaseUrls = buildList {
         add(BuildConfig.BACKEND_BASE_URL.removeSuffix("/"))
         add("http://10.0.2.2:8787")
-        add("http://192.168.1.112:8787")
         add("http://127.0.0.1:8787")
     }.distinct()
 
@@ -215,7 +214,7 @@ object TicBackendHttpClient : TicBackendApiContract {
         }
 
         throw TicBackendException(
-            message = "Tidak bisa terhubung ke server registrasi. Alamat yang dicoba: ${prioritizedBaseUrls.joinToString()}. Pastikan backend `npm start` sedang berjalan, lalu rebuild app dan pastikan device bisa mengakses laptop.",
+            message = "Tidak bisa terhubung ke server registrasi. Alamat yang dicoba: ${prioritizedBaseUrls.joinToString()}. Pastikan backend online aktif, atau override `ticBackendBaseUrl` saat build kalau Anda sedang testing ke server lokal.",
             cause = lastConnectionError,
         )
     }

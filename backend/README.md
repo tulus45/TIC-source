@@ -59,10 +59,9 @@ Kalau IP Wi-Fi komputer berubah, Anda bisa override base URL Android saat build 
 $env:ORG_GRADLE_PROJECT_ticBackendBaseUrl="http://IP-BARU-ANDA:8787"
 ```
 
-Default yang sedang dipakai project ini:
+Default backend Android di repo ini sekarang:
 
-- emulator Android: `http://192.168.1.112:8787`
-- device fisik: `http://192.168.1.112:8787`
+- `https://tic-registration-backend.onrender.com`
 
 ## Cara Deploy ke Render
 

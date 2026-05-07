@@ -5,7 +5,7 @@ plugins {
 }
 
 val backendBaseUrl = providers.gradleProperty("ticBackendBaseUrl")
-    .orElse("http://192.168.1.112:8787")
+    .orElse("https://tic-registration-backend.onrender.com")
     .get()
 
 android {
