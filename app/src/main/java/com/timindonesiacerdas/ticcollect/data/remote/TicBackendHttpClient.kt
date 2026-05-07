@@ -219,6 +219,7 @@ object TicBackendHttpClient : TicBackendApiContract {
                 put("submissionId", record.submissionId)
                 put("uid", record.uid)
                 put("gmail", record.gmail)
+                put("nama", record.nama)
                 put("projectName", record.projectName)
                 put("formName", record.formName)
                 put("answersJson", record.answersJson)
@@ -265,6 +266,7 @@ object TicBackendHttpClient : TicBackendApiContract {
                         submissionId = item.optString("submissionId"),
                         uid = item.optString("uid"),
                         gmail = item.optString("gmail"),
+                        nama = item.optString("nama"),
                         projectName = item.optString("projectName"),
                         formName = item.optString("formName"),
                         answersJson = item.optString("answersJson"),

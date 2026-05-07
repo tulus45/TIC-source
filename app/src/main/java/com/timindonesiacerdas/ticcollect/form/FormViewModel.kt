@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.json.JSONObject
 
 enum class EvidenceStepKind {
@@ -52,6 +53,12 @@ data class EvidenceGpsRecord(
     val address: String,
 )
 
+data class SubmissionEditSeed(
+    val selectedLocationByColumn: Map<String, String>,
+    val capturedPhotos: Map<String, EvidencePhotoRecord>,
+    val recordedGps: EvidenceGpsRecord?,
+)
+
 data class FormUiState(
     val isLoadingMasterData: Boolean = false,
     val masterData: SchoolMasterDataResponse? = null,
@@ -61,6 +68,8 @@ data class FormUiState(
     val currentEvidenceStepIndex: Int = 0,
     val capturedPhotos: Map<String, EvidencePhotoRecord> = emptyMap(),
     val recordedGps: EvidenceGpsRecord? = null,
+    val editingSubmissionId: String? = null,
+    val pendingEditSeed: SubmissionEditSeed? = null,
 )
 
 val defaultEvidenceSteps = listOf(
@@ -165,7 +174,7 @@ class FormViewModel : ViewModel() {
                         masterData = response,
                         selectedValues = currentSelections,
                         errorMessage = null,
-                    )
+                    ).applyPendingEditSeed()
                 }
             }.onFailure { error ->
                 _uiState.update {
@@ -201,6 +210,39 @@ class FormViewModel : ViewModel() {
             it.copy(selectedValues = List(masterData.columns.size) { "" })
         }
         resetEvidenceProgress()
+    }
+
+    fun startNewSubmission() {
+        _uiState.update { current ->
+            current.resetForFreshSubmission()
+        }
+        loadMasterData()
+    }
+
+    fun startEditingSubmission(submissionId: String) {
+        if (submissionId.isBlank()) return
+        val target = InMemorySessionStore.submissions.value
+            .firstOrNull { it.submissionId == submissionId }
+            ?: return
+        val seed = buildSubmissionEditSeed(target)
+
+        _uiState.update { current ->
+            current.copy(
+                selectedValues = current.masterData?.columns?.map { column ->
+                    seed.selectedLocationByColumn[column].orEmpty()
+                } ?: emptyList(),
+                currentEvidenceStepIndex = 0,
+                capturedPhotos = seed.capturedPhotos,
+                recordedGps = seed.recordedGps,
+                editingSubmissionId = target.submissionId,
+                pendingEditSeed = seed,
+                errorMessage = null,
+            ).applyPendingEditSeed()
+        }
+
+        if (_uiState.value.masterData == null) {
+            loadMasterData(force = true)
+        }
     }
 
     fun resetEvidenceProgress() {
@@ -290,11 +332,16 @@ class FormViewModel : ViewModel() {
 
     fun completeSubmission() {
         val state = _uiState.value
-        val user = InMemorySessionStore.session.value.user ?: return
+        val session = InMemorySessionStore.session.value
+        val user = session.user ?: return
+        val profile = session.profile
         val gps = state.recordedGps ?: return
         val schoolName = state.selectedValues.lastOrNull()?.takeIf { it.isNotBlank() } ?: return
-        val createdAt = TimeFormatter.nowStorage()
-        val submissionId = "sub-${UUID.randomUUID()}"
+        val existingSubmission = state.editingSubmissionId?.let { editingSubmissionId ->
+            InMemorySessionStore.submissions.value.firstOrNull { it.submissionId == editingSubmissionId }
+        }
+        val createdAt = existingSubmission?.createdAt ?: TimeFormatter.nowStorage()
+        val submissionId = existingSubmission?.submissionId ?: "sub-${UUID.randomUUID()}"
 
         val answersJson = JSONObject().apply {
             put(
@@ -355,9 +402,16 @@ class FormViewModel : ViewModel() {
 
         val submission = SubmissionRecord(
             submissionId = submissionId,
-            uid = user.uid,
-            gmail = user.gmail,
-            projectName = TicConstants.defaultProjectName,
+            uid = existingSubmission?.uid ?: user.uid,
+            gmail = existingSubmission?.gmail
+                ?.takeIf { it.isNotBlank() }
+                ?: profile?.gmail?.takeIf { it.isNotBlank() }
+                ?: user.gmail,
+            nama = existingSubmission?.nama
+                ?.takeIf { it.isNotBlank() }
+                ?: profile?.nama?.takeIf { it.isNotBlank() }
+                ?: user.displayName,
+            projectName = existingSubmission?.projectName ?: TicConstants.defaultProjectName,
             formName = schoolName,
             answersJson = answersJson,
             gpsLat = gps.latitude,
@@ -371,7 +425,102 @@ class FormViewModel : ViewModel() {
         )
 
         InMemorySessionStore.enqueueSubmission(submission)
-        clearSelections()
-        resetEvidenceProgress()
+        _uiState.update { current ->
+            current.resetForFreshSubmission()
+        }
+    }
+
+    private fun FormUiState.resetForFreshSubmission(): FormUiState {
+        val clearedSelections = masterData?.let { data ->
+            List(data.columns.size) { "" }
+        } ?: emptyList()
+
+        return copy(
+            selectedValues = clearedSelections,
+            currentEvidenceStepIndex = 0,
+            capturedPhotos = emptyMap(),
+            recordedGps = null,
+            editingSubmissionId = null,
+            pendingEditSeed = null,
+            errorMessage = null,
+        )
+    }
+
+    private fun FormUiState.applyPendingEditSeed(): FormUiState {
+        val seed = pendingEditSeed ?: return this
+        val masterData = masterData ?: return this
+
+        return copy(
+            selectedValues = masterData.columns.map { column ->
+                seed.selectedLocationByColumn[column].orEmpty()
+            },
+            pendingEditSeed = null,
+        )
+    }
+
+    private fun buildSubmissionEditSeed(record: SubmissionRecord): SubmissionEditSeed {
+        val payload = runCatching { JSONObject(record.answersJson) }.getOrDefault(JSONObject())
+        val selectedLocation = payload.optJSONObject("selectedLocation")
+            ?.toStringMap()
+            .orEmpty()
+        val capturedPhotos = payload.optJSONArray("evidencePhotos").toCapturedPhotoMap()
+        val recordedGps = payload.optJSONObject("gpsRecord")?.toEvidenceGpsRecord()
+
+        return SubmissionEditSeed(
+            selectedLocationByColumn = selectedLocation,
+            capturedPhotos = capturedPhotos,
+            recordedGps = recordedGps,
+        )
+    }
+
+    private fun JSONObject.toStringMap(): Map<String, String> = buildMap {
+        val iterator = keys()
+        while (iterator.hasNext()) {
+            val key = iterator.next()
+            put(key, optString(key).trim())
+        }
+    }
+
+    private fun JSONArray?.toCapturedPhotoMap(): Map<String, EvidencePhotoRecord> {
+        val source = this ?: return emptyMap()
+        return buildMap {
+            for (index in 0 until source.length()) {
+                val item = source.optJSONObject(index) ?: continue
+                val stepId = item.optString("stepId").trim()
+                if (stepId.isBlank()) continue
+
+                val filePath = item.optString("filePath").trim()
+                if (filePath.isBlank()) continue
+
+                put(
+                    stepId,
+                    EvidencePhotoRecord(
+                        filePath = filePath,
+                        timestamp = item.optString("timestamp").trim(),
+                        latitude = item.optDouble("latitude"),
+                        longitude = item.optDouble("longitude"),
+                        accuracyMeters = item.optNullableFloat("accuracyMeters"),
+                        address = item.optString("address").trim(),
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun JSONObject.toEvidenceGpsRecord(): EvidenceGpsRecord? {
+        val timestamp = optString("timestamp").trim()
+        if (timestamp.isBlank()) return null
+
+        return EvidenceGpsRecord(
+            timestamp = timestamp,
+            latitude = optDouble("latitude"),
+            longitude = optDouble("longitude"),
+            accuracyMeters = optNullableFloat("accuracyMeters"),
+            address = optString("address").trim(),
+        )
+    }
+
+    private fun JSONObject.optNullableFloat(key: String): Float? {
+        return if (has(key) && !isNull(key)) optDouble(key).toFloat() else null
     }
 }

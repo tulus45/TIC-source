@@ -6,6 +6,7 @@ const detailToolbar = document.getElementById("detailToolbar");
 const summaryText = document.getElementById("summaryText");
 const exportButton = document.getElementById("exportButton");
 const statusFilter = document.getElementById("statusFilter");
+const statusFilterField = statusFilter.closest(".toolbar__field");
 const detailTabButton = document.getElementById("detailTabButton");
 const summaryTabButton = document.getElementById("summaryTabButton");
 const uploadSummaryTabButton = document.getElementById("uploadSummaryTabButton");
@@ -77,9 +78,12 @@ async function loadRegistrations() {
     summaryItems = Array.isArray(summaryPayload.items) ? summaryPayload.items : [];
     renderRows(currentItems);
     renderSummary(summaryItems);
-    summaryText.textContent = statusFilter.value
-      ? `${payload.count || currentItems.length} data sesuai filter, ${summaryPayload.count || summaryItems.length} total registrasi`
-      : `${summaryPayload.count || summaryItems.length} total data registrasi`;
+    renderSubmissionRows(uploadItems);
+    if (activeTab === "detail-registrations") {
+      summaryText.textContent = statusFilter.value
+        ? `${payload.count || currentItems.length} data sesuai filter, ${summaryPayload.count || summaryItems.length} total registrasi`
+        : `${summaryPayload.count || summaryItems.length} total data registrasi`;
+    }
   } catch (error) {
     currentItems = [];
     summaryItems = [];
@@ -107,11 +111,19 @@ async function loadSubmissions() {
     renderSubmissionRows(uploadItems);
     renderSubmissionSummary(uploadItems);
     refreshSubmissionBreakdown();
+    if (activeTab === "detail-submissions") {
+      summaryText.textContent = uploadItems.length
+        ? `${uploadItems.length} total raw data upload`
+        : "Belum ada raw data upload yang masuk.";
+    }
   } catch (error) {
     uploadItems = [];
     renderSubmissionRows([]);
     renderSubmissionSummary([]);
     refreshSubmissionBreakdown();
+    if (activeTab === "detail-submissions") {
+      summaryText.textContent = "Belum ada raw data upload yang masuk.";
+    }
     showError(error.message || "Gagal memuat data upload.");
   } finally {
     updateExportButtonState();
@@ -328,14 +340,15 @@ function renderSubmissionRows(items) {
 
   uploadTableScroll.classList.remove("hidden");
   uploadEmptyState.classList.add("hidden");
-  const locationColumns = getSubmissionLocationColumns(items);
-  const photoColumns = getSubmissionPhotoColumns(items);
+  const orderedItems = getSubmissionRawItems(items);
+  const locationColumns = getSubmissionLocationColumns(orderedItems);
+  const photoColumns = getSubmissionPhotoColumns(orderedItems);
   const headerColumns = [
-    "Status",
+    "No.",
     "Submission ID",
     "UID",
     "Email",
-    "Project",
+    "Nama",
     ...locationColumns,
     ...photoColumns,
     "GPS Timestamp",
@@ -353,16 +366,17 @@ function renderSubmissionRows(items) {
     .join("");
   uploadTableHead.appendChild(headerRow);
 
-  items.forEach((item) => {
+  orderedItems.forEach((item, index) => {
     const parsed = parseSubmissionAnswers(item);
+    const identity = resolveSubmissionIdentity(item);
     const tr = document.createElement("tr");
     const cells = [];
 
-    cells.push(createStatusCell(item.status));
+    cells.push(createTextCell(index + 1, "cell-nowrap"));
     cells.push(createTextCell(item.submissionId, "cell-code"));
     cells.push(createTextCell(item.uid, "cell-code"));
-    cells.push(createTextCell(item.gmail, "cell-wrap"));
-    cells.push(createTextCell(item.projectName, "cell-wrap"));
+    cells.push(createTextCell(identity.gmail, "cell-wrap"));
+    cells.push(createTextCell(identity.nama, "cell-wrap"));
 
     locationColumns.forEach((column) => {
       cells.push(createTextCell(parsed.selectedLocation[column], "cell-wrap"));
@@ -616,6 +630,11 @@ function exportToExcel() {
     return;
   }
 
+  if (activeTab === "detail-submissions") {
+    exportSubmissionRawToExcel();
+    return;
+  }
+
   if (!currentItems.length) return;
 
   const rowsHtml = currentItems.map((item) => {
@@ -677,6 +696,76 @@ function exportToExcel() {
   `.trim();
 
   downloadExcelBlob(html, "tic-registrations");
+}
+
+function exportSubmissionRawToExcel() {
+  if (!uploadItems.length) return;
+
+  const orderedItems = getSubmissionRawItems(uploadItems);
+  const locationColumns = getSubmissionLocationColumns(orderedItems);
+  const photoColumns = getSubmissionPhotoColumns(orderedItems);
+  const headerColumns = [
+    "No.",
+    "Submission ID",
+    "UID",
+    "Email",
+    "Nama",
+    ...locationColumns,
+    ...photoColumns,
+    "GPS Timestamp",
+    "GPS Latitude",
+    "GPS Longitude",
+    "GPS Akurasi",
+    "GPS Alamat",
+    "Tanggal Disimpan",
+    "Tanggal Upload",
+  ];
+
+  const rowsHtml = orderedItems.map((item, index) => {
+    const parsed = parseSubmissionAnswers(item);
+    const identity = resolveSubmissionIdentity(item);
+    const values = [
+      index + 1,
+      item.submissionId || "",
+      item.uid || "",
+      identity.gmail || "",
+      identity.nama || "",
+      ...locationColumns.map((column) => parsed.selectedLocation[column] || ""),
+      ...photoColumns.map((title) => {
+        const photo = parsed.photoMap.get(title);
+        return photo?.url || photo?.filename || "";
+      }),
+      formatDate(parsed.gpsRecord.timestamp),
+      parsed.gpsRecord.latitude,
+      parsed.gpsRecord.longitude,
+      parsed.gpsRecord.accuracyMeters,
+      parsed.gpsRecord.address,
+      formatDate(item.createdAt),
+      formatDate(item.uploadedAt),
+    ];
+
+    return `<tr>${values.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`;
+  }).join("");
+
+  const html = `
+    <html>
+      <head>
+        <meta charset="utf-8" />
+      </head>
+      <body>
+        <table border="1">
+          <thead>
+            <tr>
+              ${headerColumns.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </body>
+    </html>
+  `.trim();
+
+  downloadExcelBlob(html, "tic-upload-raw-data");
 }
 
 function exportSummaryToExcel() {
@@ -1025,6 +1114,25 @@ function parseSubmissionAnswers(item) {
   };
 }
 
+function resolveSubmissionIdentity(item) {
+  const matchedRegistration = summaryItems.find((registration) => {
+    if (item.uid && registration.uid === item.uid) {
+      return true;
+    }
+
+    if (item.gmail && registration.gmail && registration.gmail === item.gmail) {
+      return true;
+    }
+
+    return false;
+  });
+
+  return {
+    gmail: item.gmail || matchedRegistration?.gmail || "",
+    nama: item.nama || matchedRegistration?.nama || matchedRegistration?.displayName || "",
+  };
+}
+
 function createTextCell(value, className = "") {
   const td = document.createElement("td");
   if (className) td.className = className;
@@ -1049,6 +1157,14 @@ function normalizeSearchValue(value) {
     .toLowerCase();
 }
 
+function getSubmissionRawItems(items) {
+  return [...items].sort((left, right) =>
+    String(left.uploadedAt || left.createdAt || "").localeCompare(
+      String(right.uploadedAt || right.createdAt || ""),
+    ),
+  );
+}
+
 function setActiveTab(tab) {
   activeTab = tab;
   const showRegistrationSummary = tab === "summary-registrations";
@@ -1065,7 +1181,8 @@ function setActiveTab(tab) {
   uploadRawTabButton.setAttribute("aria-selected", showUploadRaw ? "true" : "false");
   masterTabButton.setAttribute("aria-selected", showMasterPanel ? "true" : "false");
 
-  detailToolbar.classList.toggle("hidden", !showRegistrationDetail);
+  detailToolbar.classList.toggle("hidden", !(showRegistrationDetail || showUploadRaw));
+  statusFilterField.classList.toggle("hidden", !showRegistrationDetail);
   summaryPanel.classList.toggle("hidden", !showRegistrationSummary);
   detailPanel.classList.toggle("hidden", !showRegistrationDetail);
   uploadSummaryPanel.classList.toggle("hidden", !showUploadSummary);
@@ -1073,6 +1190,16 @@ function setActiveTab(tab) {
   uploadBreakdownPanel.classList.toggle("hidden", !showUploadBreakdown);
   uploadRawPanel.classList.toggle("hidden", !showUploadRaw);
   masterPanel.classList.toggle("hidden", !showMasterPanel);
+  if (showRegistrationDetail) {
+    summaryText.textContent = statusFilter.value
+      ? `${currentItems.length} data sesuai filter, ${summaryItems.length} total registrasi`
+      : `${summaryItems.length} total data registrasi`;
+  }
+  if (showUploadRaw) {
+    summaryText.textContent = uploadItems.length
+      ? `${uploadItems.length} total raw data upload`
+      : "Belum ada raw data upload yang masuk.";
+  }
   updateExportButtonState();
 }
 

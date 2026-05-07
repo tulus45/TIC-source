@@ -25,6 +25,7 @@ import com.timindonesiacerdas.ticcollect.data.remote.RegistrationUploadResponse
 import com.timindonesiacerdas.ticcollect.data.remote.TicBackendHttpClient
 import com.timindonesiacerdas.ticcollect.utils.ImageUploadOptimizer
 import com.timindonesiacerdas.ticcollect.utils.TimeFormatter
+import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -267,10 +268,21 @@ object InMemorySessionStore {
 
     fun enqueueSubmission(record: SubmissionRecord) {
         ensureInitialized()
-        val updatedItems = listOf(record) + _submissions.value.filterNot { it.submissionId == record.submissionId }
-        val sortedItems = updatedItems.sortedByDescending { it.createdAt }
-        _submissions.value = sortedItems
-        persistSubmissions(sortedItems)
+        upsertSubmission(record)
+    }
+
+    fun deleteSubmission(submissionId: String) {
+        ensureInitialized()
+        if (submissionId.isBlank()) return
+
+        val target = _submissions.value.firstOrNull { it.submissionId == submissionId } ?: return
+        cleanupSubmissionFiles(target)
+
+        val updatedItems = _submissions.value
+            .filterNot { it.submissionId == submissionId }
+            .sortedByDescending { it.createdAt }
+        _submissions.value = updatedItems
+        persistSubmissions(updatedItems)
     }
 
     fun uploadSubmission(submissionId: String) {
@@ -350,6 +362,13 @@ object InMemorySessionStore {
     }.getOrDefault(default)
 
     private fun replaceSubmission(record: SubmissionRecord) {
+        upsertSubmission(record)
+    }
+
+    private fun upsertSubmission(record: SubmissionRecord) {
+        val previousRecord = _submissions.value.firstOrNull { it.submissionId == record.submissionId }
+        cleanupReplacedSubmissionFiles(previousRecord, record)
+
         val updatedItems = _submissions.value
             .filterNot { it.submissionId == record.submissionId } + record
         val sortedItems = updatedItems.sortedByDescending { it.createdAt }
@@ -357,7 +376,45 @@ object InMemorySessionStore {
         persistSubmissions(sortedItems)
     }
 
+    private fun cleanupReplacedSubmissionFiles(
+        previousRecord: SubmissionRecord?,
+        updatedRecord: SubmissionRecord,
+    ) {
+        if (previousRecord == null) return
+
+        val activePaths = updatedRecord.files.map { it.localPath }.toSet()
+        previousRecord.files
+            .map { it.localPath }
+            .filter { it.isNotBlank() && it !in activePaths }
+            .forEach(::deleteLocalFile)
+    }
+
+    private fun cleanupSubmissionFiles(record: SubmissionRecord) {
+        record.files
+            .map { it.localPath }
+            .filter { it.isNotBlank() }
+            .forEach(::deleteLocalFile)
+    }
+
+    private fun deleteLocalFile(path: String) {
+        runCatching {
+            val file = File(path)
+            if (file.exists()) {
+                file.delete()
+            }
+        }
+    }
+
     private fun prepareSubmissionForUpload(record: SubmissionRecord): SubmissionRecord {
+        val session = _session.value
+        val preparedGmail = record.gmail.ifBlank {
+            session.profile?.gmail?.takeIf { it.isNotBlank() }
+                ?: session.user?.gmail.orEmpty()
+        }
+        val preparedNama = record.nama.ifBlank {
+            session.profile?.nama?.takeIf { it.isNotBlank() }
+                ?: session.user?.displayName.orEmpty()
+        }
         val preparedFiles = record.files.map { file ->
             if (file.fileType != SubmissionFileType.PHOTO) {
                 file
@@ -374,7 +431,11 @@ object InMemorySessionStore {
             }
         }
 
-        return record.copy(files = preparedFiles)
+        return record.copy(
+            gmail = preparedGmail,
+            nama = preparedNama,
+            files = preparedFiles,
+        )
     }
 
     private fun loadStoredSubmissions(): List<SubmissionRecord> {
@@ -405,6 +466,7 @@ object InMemorySessionStore {
         put("submissionId", submissionId)
         put("uid", uid)
         put("gmail", gmail)
+        put("nama", nama)
         put("projectName", projectName)
         put("formName", formName)
         put("answersJson", answersJson)
@@ -439,6 +501,7 @@ object InMemorySessionStore {
         submissionId = optString("submissionId"),
         uid = optString("uid"),
         gmail = optString("gmail"),
+        nama = optString("nama"),
         projectName = optString("projectName"),
         formName = optString("formName"),
         answersJson = optString("answersJson"),

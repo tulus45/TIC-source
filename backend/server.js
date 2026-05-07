@@ -109,6 +109,30 @@ async function writeSubmissions(items) {
   );
 }
 
+function findRegistrationForSubmission(items, submissionRecord) {
+  const uid = normalizeString(submissionRecord?.uid);
+  const gmail = normalizeString(submissionRecord?.gmail).toLowerCase();
+
+  return items.find((item) => {
+    if (uid && normalizeString(item.uid) === uid) return true;
+    if (gmail && normalizeString(item.gmail).toLowerCase() === gmail) return true;
+    return false;
+  });
+}
+
+function normalizeSubmissionIdentity(record, registrations = []) {
+  const matchedRegistration = findRegistrationForSubmission(registrations, record);
+
+  return {
+    ...record,
+    gmail: normalizeString(record?.gmail) || normalizeString(matchedRegistration?.gmail),
+    nama:
+      normalizeString(record?.nama)
+      || normalizeString(matchedRegistration?.nama)
+      || normalizeString(matchedRegistration?.displayName),
+  };
+}
+
 async function readSchoolMaster() {
   await ensureStorage();
   const raw = await fs.readFile(schoolMasterFile, "utf8");
@@ -482,16 +506,18 @@ function findRegistration(items, searchParams) {
 
 async function buildSubmissionRecord(body) {
   const now = new Date().toISOString();
+  const registrations = await readRegistrations();
   const files = await storeSubmissionFiles(
     normalizeString(body.uid),
     normalizeString(body.submissionId),
     Array.isArray(body.files) ? body.files : [],
   );
 
-  return {
+  return normalizeSubmissionIdentity({
     submissionId: normalizeString(body.submissionId),
     uid: normalizeString(body.uid),
     gmail: normalizeString(body.gmail),
+    nama: normalizeString(body.nama),
     projectName: normalizeString(body.projectName),
     formName: normalizeString(body.formName),
     answersJson: typeof body.answersJson === "string" ? body.answersJson : JSON.stringify(body.answersJson || {}),
@@ -505,7 +531,7 @@ async function buildSubmissionRecord(body) {
     files,
     source: "android",
     updatedAt: now,
-  };
+  }, registrations);
 }
 
 async function handleApi(req, res, url) {
@@ -679,10 +705,14 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/submissions/me") {
-    const items = await readSubmissions();
+    const [items, registrations] = await Promise.all([
+      readSubmissions(),
+      readRegistrations(),
+    ]);
+    const normalizedItems = items.map((item) => normalizeSubmissionIdentity(item, registrations));
     const uid = normalizeString(url.searchParams.get("uid"));
     const gmail = normalizeString(url.searchParams.get("gmail")).toLowerCase();
-    const filtered = items.filter((item) => {
+    const filtered = normalizedItems.filter((item) => {
       if (uid && item.uid === uid) return true;
       if (gmail && normalizeString(item.gmail).toLowerCase() === gmail) return true;
       return false;
@@ -697,11 +727,15 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/admin/submissions") {
-    const items = await readSubmissions();
+    const [items, registrations] = await Promise.all([
+      readSubmissions(),
+      readRegistrations(),
+    ]);
+    const normalizedItems = items.map((item) => normalizeSubmissionIdentity(item, registrations));
     const statusFilter = normalizeString(url.searchParams.get("status")).toUpperCase();
     const filtered = statusFilter
-      ? items.filter((item) => normalizeString(item.status).toUpperCase() === statusFilter)
-      : items;
+      ? normalizedItems.filter((item) => normalizeString(item.status).toUpperCase() === statusFilter)
+      : normalizedItems;
 
     sendJson(res, 200, {
       items: filtered.sort((a, b) => String(b.uploadedAt || b.createdAt).localeCompare(String(a.uploadedAt || a.createdAt))),

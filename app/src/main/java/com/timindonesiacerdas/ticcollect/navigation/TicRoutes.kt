@@ -14,6 +14,6 @@ object TicRoutes {
     const val Form = "form"
     const val EvidenceWorkflow = "evidence_workflow"
     const val PendingUpload = "pending_upload"
-    const val SubmissionHistory = "submission_history"
+    const val Draft = "draft"
     const val Profile = "profile"
 }
