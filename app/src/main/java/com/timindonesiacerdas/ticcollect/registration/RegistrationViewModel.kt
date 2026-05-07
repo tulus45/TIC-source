@@ -263,16 +263,21 @@ class RegistrationViewModel(
         )
     }
 
-    fun refreshRegistrationStatus() {
+    fun refreshRegistrationStatus(showFailureMessage: Boolean = true) {
         val current = _uiState.value
         if (!current.isAuthenticated || current.uid.isBlank()) return
         if (current.isRefreshingStatus) return
+        val previousSyncMessage = current.statusSyncMessage
 
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
                     isRefreshingStatus = true,
-                    statusSyncMessage = "Memeriksa status terbaru dari server...",
+                    statusSyncMessage = if (showFailureMessage) {
+                        "Memeriksa status terbaru dari server..."
+                    } else {
+                        it.statusSyncMessage
+                    },
                 )
             }
 
@@ -300,7 +305,11 @@ class RegistrationViewModel(
                 _uiState.update {
                     it.copy(
                         isRefreshingStatus = false,
-                        statusSyncMessage = error.message ?: "Belum bisa mengambil status dari server.",
+                        statusSyncMessage = if (showFailureMessage) {
+                            error.message ?: "Belum bisa mengambil status dari server."
+                        } else {
+                            previousSyncMessage ?: fallbackStatusMessage(it.currentStatus)
+                        },
                     )
                 }
             }
@@ -454,4 +463,12 @@ class RegistrationViewModel(
     private fun registrationStatusFromServer(value: String): RegistrationStatus =
         runCatching { RegistrationStatus.valueOf(value.trim().uppercase()) }
             .getOrDefault(RegistrationStatus.PENDING)
+
+    private fun fallbackStatusMessage(status: RegistrationStatus?): String = when (status) {
+        RegistrationStatus.APPROVED -> "Registrasi Anda sudah disetujui. Akses Home akan dibuka."
+        RegistrationStatus.REJECTED -> "Registrasi ditolak. Silakan periksa catatan admin."
+        RegistrationStatus.PENDING -> "Registrasi sudah dikirim. Status terakhir masih menunggu review admin."
+        RegistrationStatus.NOT_REGISTERED, null ->
+            "Belum bisa memeriksa status otomatis. Tekan Refresh Status untuk mencoba lagi."
+    }
 }

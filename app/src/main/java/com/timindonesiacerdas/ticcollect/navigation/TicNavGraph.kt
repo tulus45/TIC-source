@@ -119,7 +119,7 @@ fun TicNavGraph(
 
         composable(TicRoutes.WaitingApproval) {
             LaunchedEffect(Unit) {
-                registrationViewModel.refreshRegistrationStatus()
+                registrationViewModel.refreshRegistrationStatus(showFailureMessage = false)
             }
 
             LaunchedEffect(registrationUiState.currentStatus) {
