@@ -21,9 +21,10 @@
         <button id="detailTabButton" class="tab-button" type="button" aria-selected="false">Data Registrasi</button>
         <button id="uploadSummaryTabButton" class="tab-button" type="button" aria-selected="false">Summary Upload Data</button>
         <button id="uploadRawTabButton" class="tab-button" type="button" aria-selected="false">Raw Data Upload</button>
+        <button id="masterTabButton" class="tab-button" type="button" aria-selected="false">Master Data Sekolah</button>
       </section>
 
-      <section class="master-panel" aria-label="Pembaruan master data sekolah">
+      <section id="masterPanel" class="master-panel hidden" aria-label="Pembaruan master data sekolah">
         <div class="master-panel__intro">
           <div class="hero__badge hero__badge--light">Master Data Sekolah</div>
           <h2>Upload Excel untuk update cascading lokasi</h2>
@@ -110,15 +111,15 @@
       </section>
 
       <section id="uploadSummaryPanel" class="table-panel hidden">
-        <div class="summary-note">Ringkasan ini mengelompokkan data upload berdasarkan nama sekolah.</div>
+        <div class="summary-note">Ringkasan ini menghitung target sekolah per kabupaten dari master data dan achievement upload yang sudah masuk.</div>
         <div id="uploadSummaryScroll" class="table-scroll">
           <table class="registrations-table registrations-table--summary">
             <thead>
               <tr>
-                <th>Nama Sekolah</th>
-                <th>Total Data</th>
-                <th>Total File</th>
-                <th>Upload Terakhir</th>
+                <th>Kabupaten</th>
+                <th>Target</th>
+                <th>Achv</th>
+                <th>To be Achv</th>
               </tr>
             </thead>
             <tbody id="uploadSummaryBody"></tbody>
@@ -130,21 +131,8 @@
 
       <section id="uploadRawPanel" class="table-panel hidden">
         <div id="uploadTableScroll" class="table-scroll">
-          <table class="registrations-table">
-            <thead>
-              <tr>
-                <th>Status</th>
-                <th>Submission ID</th>
-                <th>UID</th>
-                <th>Email</th>
-                <th>Project</th>
-                <th>Nama Sekolah</th>
-                <th>Jumlah File</th>
-                <th>Dokumen</th>
-                <th>Tanggal Disimpan</th>
-                <th>Tanggal Upload</th>
-              </tr>
-            </thead>
+          <table id="uploadRawTable" class="registrations-table">
+            <thead id="uploadTableHead"></thead>
             <tbody id="uploadTableBody"></tbody>
           </table>
         </div>

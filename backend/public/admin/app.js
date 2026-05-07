@@ -10,6 +10,7 @@ const detailTabButton = document.getElementById("detailTabButton");
 const summaryTabButton = document.getElementById("summaryTabButton");
 const uploadSummaryTabButton = document.getElementById("uploadSummaryTabButton");
 const uploadRawTabButton = document.getElementById("uploadRawTabButton");
+const masterTabButton = document.getElementById("masterTabButton");
 const detailPanel = document.getElementById("detailPanel");
 const summaryPanel = document.getElementById("summaryPanel");
 const summaryScroll = document.getElementById("summaryScroll");
@@ -21,15 +22,16 @@ const uploadSummaryBody = document.getElementById("uploadSummaryBody");
 const uploadSummaryEmptyState = document.getElementById("uploadSummaryEmptyState");
 const uploadRawPanel = document.getElementById("uploadRawPanel");
 const uploadTableScroll = document.getElementById("uploadTableScroll");
+const uploadTableHead = document.getElementById("uploadTableHead");
 const uploadTableBody = document.getElementById("uploadTableBody");
 const uploadEmptyState = document.getElementById("uploadEmptyState");
+const masterPanel = document.getElementById("masterPanel");
 const masterFileInput = document.getElementById("masterFileInput");
 const masterUploadButton = document.getElementById("masterUploadButton");
 const masterRefreshButton = document.getElementById("masterRefreshButton");
 const masterUploadStatus = document.getElementById("masterUploadStatus");
 const masterDataInfo = document.getElementById("masterDataInfo");
 const template = document.getElementById("rowTemplate");
-const uploadTemplate = document.getElementById("uploadRowTemplate");
 let currentItems = [];
 let summaryItems = [];
 let uploadItems = [];
@@ -120,10 +122,14 @@ async function loadMasterDataInfo() {
       `Jumlah baris: ${rows.length}`,
       `Update terakhir: ${formatDate(payload.updatedAt)}`,
     ].join(" | ");
+    renderSubmissionSummary(uploadItems);
+    renderSubmissionRows(uploadItems);
   } catch (error) {
     currentMasterData = null;
     masterDataInfo.textContent = error.message || "Belum bisa memuat info master data.";
     showError(error.message || "Belum bisa memuat info master data.");
+    renderSubmissionSummary(uploadItems);
+    renderSubmissionRows(uploadItems);
   }
 }
 
@@ -295,6 +301,7 @@ function renderSummary(items) {
 }
 
 function renderSubmissionRows(items) {
+  uploadTableHead.innerHTML = "";
   uploadTableBody.innerHTML = "";
 
   if (!items.length) {
@@ -305,54 +312,76 @@ function renderSubmissionRows(items) {
 
   uploadTableScroll.classList.remove("hidden");
   uploadEmptyState.classList.add("hidden");
+  const locationColumns = getSubmissionLocationColumns(items);
+  const photoColumns = getSubmissionPhotoColumns(items);
+  const headerColumns = [
+    "Status",
+    "Submission ID",
+    "UID",
+    "Email",
+    "Project",
+    ...locationColumns,
+    ...photoColumns,
+    "GPS Timestamp",
+    "GPS Latitude",
+    "GPS Longitude",
+    "GPS Akurasi",
+    "GPS Alamat",
+    "Tanggal Disimpan",
+    "Tanggal Upload",
+  ];
+
+  const headerRow = document.createElement("tr");
+  headerRow.innerHTML = headerColumns
+    .map((column) => `<th>${escapeHtml(column)}</th>`)
+    .join("");
+  uploadTableHead.appendChild(headerRow);
 
   items.forEach((item) => {
-    const fragment = uploadTemplate.content.cloneNode(true);
-    const statusPill = fragment.querySelector(".status-pill");
-    const submissionId = fragment.querySelector(".row-submission-id");
-    const uid = fragment.querySelector(".row-submission-uid");
-    const gmail = fragment.querySelector(".row-submission-gmail");
-    const project = fragment.querySelector(".row-submission-project");
-    const school = fragment.querySelector(".row-submission-school");
-    const fileCount = fragment.querySelector(".row-submission-file-count");
-    const fileList = fragment.querySelector(".row-submission-files");
-    const created = fragment.querySelector(".row-submission-created");
-    const uploaded = fragment.querySelector(".row-submission-uploaded");
-    const files = Array.isArray(item.files) ? item.files : [];
+    const parsed = parseSubmissionAnswers(item);
+    const tr = document.createElement("tr");
+    const cells = [];
 
-    statusPill.textContent = item.status || "-";
-    statusPill.dataset.status = item.status || "";
-    submissionId.textContent = item.submissionId || "-";
-    uid.textContent = item.uid || "-";
-    gmail.textContent = item.gmail || "-";
-    project.textContent = item.projectName || "-";
-    school.textContent = item.formName || "-";
-    fileCount.textContent = String(files.length);
-    created.textContent = formatDate(item.createdAt);
-    uploaded.textContent = formatDate(item.uploadedAt);
+    cells.push(createStatusCell(item.status));
+    cells.push(createTextCell(item.submissionId, "cell-code"));
+    cells.push(createTextCell(item.uid, "cell-code"));
+    cells.push(createTextCell(item.gmail, "cell-wrap"));
+    cells.push(createTextCell(item.projectName, "cell-wrap"));
 
-    if (!files.length) {
-      fileList.textContent = "-";
-    } else {
-      const wrapper = document.createElement("div");
-      wrapper.className = "submission-files";
-      files.forEach((file, index) => {
+    locationColumns.forEach((column) => {
+      cells.push(createTextCell(parsed.selectedLocation[column], "cell-wrap"));
+    });
+
+    photoColumns.forEach((title) => {
+      const photo = parsed.photoMap.get(title);
+      const td = document.createElement("td");
+      td.className = "cell-wrap";
+
+      if (photo?.url) {
         const link = document.createElement("a");
         link.className = "submission-file-link";
-        link.textContent = file.filename || `File ${index + 1}`;
-        if (file.driveFileId) {
-          link.href = file.driveFileId;
-          link.target = "_blank";
-          link.rel = "noreferrer noopener";
-        } else {
-          link.classList.add("submission-file-link--muted");
-        }
-        wrapper.appendChild(link);
-      });
-      fileList.appendChild(wrapper);
-    }
+        link.href = photo.url;
+        link.target = "_blank";
+        link.rel = "noreferrer noopener";
+        link.textContent = photo.filename || "Lihat Foto";
+        td.appendChild(link);
+      } else {
+        td.textContent = "-";
+      }
 
-    uploadTableBody.appendChild(fragment);
+      cells.push(td);
+    });
+
+    cells.push(createTextCell(formatDate(parsed.gpsRecord.timestamp), "cell-nowrap"));
+    cells.push(createTextCell(parsed.gpsRecord.latitude, "cell-nowrap"));
+    cells.push(createTextCell(parsed.gpsRecord.longitude, "cell-nowrap"));
+    cells.push(createTextCell(parsed.gpsRecord.accuracyMeters, "cell-nowrap"));
+    cells.push(createTextCell(parsed.gpsRecord.address, "cell-wrap"));
+    cells.push(createTextCell(formatDate(item.createdAt), "cell-nowrap"));
+    cells.push(createTextCell(formatDate(item.uploadedAt), "cell-nowrap"));
+
+    cells.forEach((cell) => tr.appendChild(cell));
+    uploadTableBody.appendChild(tr);
   });
 }
 
@@ -372,10 +401,10 @@ function renderSubmissionSummary(items) {
   rows.forEach((row) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td class="cell-wrap cell-strong">${escapeHtml(row.schoolName)}</td>
-      <td class="cell-nowrap">${row.totalData}</td>
-      <td class="cell-nowrap">${row.totalFiles}</td>
-      <td class="cell-nowrap">${escapeHtml(formatDate(row.latestUploadedAt))}</td>
+      <td class="cell-wrap cell-strong">${escapeHtml(row.kabupaten)}</td>
+      <td class="cell-nowrap">${row.target}</td>
+      <td class="cell-nowrap">${row.achv}</td>
+      <td class="cell-nowrap">${row.toBeAchv}</td>
     `;
     uploadSummaryBody.appendChild(tr);
   });
@@ -384,9 +413,9 @@ function renderSubmissionSummary(items) {
   totalRow.className = "summary-total-row";
   totalRow.innerHTML = `
     <td class="cell-wrap cell-strong">Total</td>
-    <td class="cell-nowrap cell-strong">${totals.totalData}</td>
-    <td class="cell-nowrap cell-strong">${totals.totalFiles}</td>
-    <td class="cell-nowrap cell-strong">${escapeHtml(formatDate(totals.latestUploadedAt))}</td>
+    <td class="cell-nowrap cell-strong">${totals.target}</td>
+    <td class="cell-nowrap cell-strong">${totals.achv}</td>
+    <td class="cell-nowrap cell-strong">${totals.toBeAchv}</td>
   `;
   uploadSummaryBody.appendChild(totalRow);
 }
@@ -476,7 +505,9 @@ function updateExportButtonState(isLoading = false) {
     ? currentItems.length > 0
     : activeTab === "summary-registrations"
       ? summaryItems.length > 0
-      : uploadItems.length > 0;
+      : activeTab === "summary-submissions" || activeTab === "detail-submissions"
+        ? uploadItems.length > 0
+        : false;
   exportButton.disabled = isLoading || !hasRows;
 }
 
@@ -702,43 +733,161 @@ function buildAreaSummary(items) {
 }
 
 function buildSubmissionSummary(items) {
-  const schoolMap = new Map();
-  const totals = {
-    totalData: 0,
-    totalFiles: 0,
-    latestUploadedAt: "",
-  };
+  const { kabupatenColumn, schoolColumn } = getMasterColumnHints();
+  const targetMap = new Map();
+  const achievementMap = new Map();
 
-  items.forEach((item) => {
-    const schoolName = item.formName || "Tanpa nama sekolah";
-    const uploadedAt = item.uploadedAt || item.createdAt || "";
-    const files = Array.isArray(item.files) ? item.files : [];
+  const masterRows = Array.isArray(currentMasterData?.rows) ? currentMasterData.rows : [];
+  const masterColumns = Array.isArray(currentMasterData?.columns) ? currentMasterData.columns : [];
+  const kabupatenIndex = masterColumns.indexOf(kabupatenColumn);
+  const schoolIndex = masterColumns.indexOf(schoolColumn);
 
-    if (!schoolMap.has(schoolName)) {
-      schoolMap.set(schoolName, {
-        schoolName,
-        totalData: 0,
-        totalFiles: 0,
-        latestUploadedAt: "",
-      });
+  masterRows.forEach((row) => {
+    const kabupaten = String(row?.[kabupatenIndex] || "").trim() || "Belum diisi";
+    const schoolName = String(row?.[schoolIndex] || "").trim() || JSON.stringify(row);
+    if (!targetMap.has(kabupaten)) {
+      targetMap.set(kabupaten, new Set());
     }
-
-    const row = schoolMap.get(schoolName);
-    row.totalData += 1;
-    row.totalFiles += files.length;
-    if (!row.latestUploadedAt || String(uploadedAt).localeCompare(String(row.latestUploadedAt)) > 0) {
-      row.latestUploadedAt = uploadedAt;
-    }
-
-    totals.totalData += 1;
-    totals.totalFiles += files.length;
-    if (!totals.latestUploadedAt || String(uploadedAt).localeCompare(String(totals.latestUploadedAt)) > 0) {
-      totals.latestUploadedAt = uploadedAt;
-    }
+    targetMap.get(kabupaten).add(schoolName);
   });
 
-  const rows = Array.from(schoolMap.values()).sort((a, b) => a.schoolName.localeCompare(b.schoolName, "id"));
+  items.forEach((item) => {
+    if (String(item.status || "").toUpperCase() !== "UPLOADED") {
+      return;
+    }
+
+    const parsed = parseSubmissionAnswers(item);
+    const kabupaten = String(parsed.selectedLocation[kabupatenColumn] || "").trim() || "Belum diisi";
+    const schoolName = String(parsed.selectedLocation[schoolColumn] || item.formName || item.submissionId).trim();
+    if (!achievementMap.has(kabupaten)) {
+      achievementMap.set(kabupaten, new Set());
+    }
+    achievementMap.get(kabupaten).add(schoolName);
+  });
+
+  const allKabupaten = Array.from(
+    new Set([
+      ...targetMap.keys(),
+      ...achievementMap.keys(),
+    ]),
+  ).sort((a, b) => a.localeCompare(b, "id"));
+
+  const totals = {
+    target: 0,
+    achv: 0,
+    toBeAchv: 0,
+  };
+
+  const rows = allKabupaten.map((kabupaten) => {
+    const target = targetMap.get(kabupaten)?.size || 0;
+    const achv = achievementMap.get(kabupaten)?.size || 0;
+    const toBeAchv = Math.max(target - achv, 0);
+
+    totals.target += target;
+    totals.achv += achv;
+    totals.toBeAchv += toBeAchv;
+
+    return {
+      kabupaten,
+      target,
+      achv,
+      toBeAchv,
+    };
+  });
+
   return { rows, totals };
+}
+
+function getMasterColumnHints() {
+  const columns = Array.isArray(currentMasterData?.columns) ? currentMasterData.columns : [];
+  const kabupatenColumn = columns.find((column) => /kab/i.test(column)) || columns[0] || "Kabupaten";
+  const schoolColumn = columns.find((column) => /sekolah/i.test(column)) || columns[columns.length - 1] || "Nama Sekolah";
+  return { kabupatenColumn, schoolColumn };
+}
+
+function getSubmissionLocationColumns(items) {
+  const masterColumns = Array.isArray(currentMasterData?.columns) ? currentMasterData.columns : [];
+  if (masterColumns.length) {
+    return masterColumns;
+  }
+
+  const seen = new Set();
+  items.forEach((item) => {
+    const parsed = parseSubmissionAnswers(item);
+    Object.keys(parsed.selectedLocation).forEach((key) => {
+      if (key) seen.add(key);
+    });
+  });
+
+  return Array.from(seen);
+}
+
+function getSubmissionPhotoColumns(items) {
+  const seen = new Set();
+  items.forEach((item) => {
+    const parsed = parseSubmissionAnswers(item);
+    parsed.photoList.forEach((photo) => {
+      if (photo.title) {
+        seen.add(photo.title);
+      }
+    });
+  });
+  return Array.from(seen);
+}
+
+function parseSubmissionAnswers(item) {
+  let payload = {};
+  try {
+    payload = item?.answersJson ? JSON.parse(item.answersJson) : {};
+  } catch {
+    payload = {};
+  }
+
+  const selectedLocation = payload.selectedLocation && typeof payload.selectedLocation === "object"
+    ? payload.selectedLocation
+    : {};
+  const evidencePhotos = Array.isArray(payload.evidencePhotos) ? payload.evidencePhotos : [];
+  const files = Array.isArray(item.files) ? item.files : [];
+  const photoList = evidencePhotos.map((photo, index) => ({
+    title: String(photo?.title || photo?.stepId || `Foto ${index + 1}`),
+    url: files[index]?.driveFileId || "",
+    filename: files[index]?.filename || photo?.title || `Foto ${index + 1}`,
+  }));
+  const photoMap = new Map(photoList.map((photo) => [photo.title, photo]));
+  const gpsRecord = payload.gpsRecord && typeof payload.gpsRecord === "object"
+    ? payload.gpsRecord
+    : {};
+
+  return {
+    selectedLocation,
+    photoList,
+    photoMap,
+    gpsRecord: {
+      timestamp: gpsRecord.timestamp || "",
+      latitude: gpsRecord.latitude ?? "",
+      longitude: gpsRecord.longitude ?? "",
+      accuracyMeters: gpsRecord.accuracyMeters ?? "",
+      address: gpsRecord.address || "",
+    },
+  };
+}
+
+function createTextCell(value, className = "") {
+  const td = document.createElement("td");
+  if (className) td.className = className;
+  const normalized = value === undefined || value === null || value === "" ? "-" : String(value);
+  td.textContent = normalized;
+  return td;
+}
+
+function createStatusCell(status) {
+  const td = document.createElement("td");
+  const pill = document.createElement("span");
+  pill.className = "status-pill";
+  pill.dataset.status = status || "";
+  pill.textContent = status || "-";
+  td.appendChild(pill);
+  return td;
 }
 
 function setActiveTab(tab) {
@@ -747,17 +896,20 @@ function setActiveTab(tab) {
   const showRegistrationDetail = tab === "detail-registrations";
   const showUploadSummary = tab === "summary-submissions";
   const showUploadRaw = tab === "detail-submissions";
+  const showMasterPanel = tab === "master-data";
 
   summaryTabButton.setAttribute("aria-selected", showRegistrationSummary ? "true" : "false");
   detailTabButton.setAttribute("aria-selected", showRegistrationDetail ? "true" : "false");
   uploadSummaryTabButton.setAttribute("aria-selected", showUploadSummary ? "true" : "false");
   uploadRawTabButton.setAttribute("aria-selected", showUploadRaw ? "true" : "false");
+  masterTabButton.setAttribute("aria-selected", showMasterPanel ? "true" : "false");
 
   detailToolbar.classList.toggle("hidden", !showRegistrationDetail);
   summaryPanel.classList.toggle("hidden", !showRegistrationSummary);
   detailPanel.classList.toggle("hidden", !showRegistrationDetail);
   uploadSummaryPanel.classList.toggle("hidden", !showUploadSummary);
   uploadRawPanel.classList.toggle("hidden", !showUploadRaw);
+  masterPanel.classList.toggle("hidden", !showMasterPanel);
   updateExportButtonState();
 }
 
@@ -837,6 +989,7 @@ summaryTabButton.addEventListener("click", () => setActiveTab("summary-registrat
 detailTabButton.addEventListener("click", () => setActiveTab("detail-registrations"));
 uploadSummaryTabButton.addEventListener("click", () => setActiveTab("summary-submissions"));
 uploadRawTabButton.addEventListener("click", () => setActiveTab("detail-submissions"));
+masterTabButton.addEventListener("click", () => setActiveTab("master-data"));
 masterUploadButton.addEventListener("click", uploadMasterDataExcel);
 masterRefreshButton.addEventListener("click", loadMasterDataInfo);
 masterFileInput.addEventListener("change", () => {
