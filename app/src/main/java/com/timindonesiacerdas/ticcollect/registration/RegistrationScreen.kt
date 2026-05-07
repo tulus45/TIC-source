@@ -48,6 +48,7 @@ fun RegistrationScreen(
     onBack: () -> Unit,
     onCaptureKtp: () -> Unit,
     onCaptureSelfie: () -> Unit,
+    onGmailChanged: (String) -> Unit,
     onNikChanged: (String) -> Unit,
     onNamaChanged: (String) -> Unit,
     onAlamatChanged: (String) -> Unit,
@@ -189,10 +190,10 @@ fun RegistrationScreen(
                         }
                         OutlinedTextField(
                             value = uiState.gmail,
-                            onValueChange = {},
+                            onValueChange = onGmailChanged,
                             modifier = Modifier.fillMaxWidth(),
-                            readOnly = true,
-                            label = { Text("Gmail") },
+                            label = { Text("Email") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                         )
                         OutlinedTextField(
                             value = uiState.nik,

@@ -20,6 +20,7 @@ fun ProfileScreen(
 ) {
     val user = uiState.session.user
     val profile = uiState.session.profile
+    val displayedEmail = profile?.gmail ?: user?.gmail.orEmpty()
 
     TicScreenContainer(
         title = "Profile",
@@ -37,7 +38,7 @@ fun ProfileScreen(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "UID: ${user?.uid.orEmpty()}")
-                Text(text = "Gmail: ${user?.gmail.orEmpty()}")
+                Text(text = "Email: $displayedEmail")
                 Text(text = "Display Name: ${user?.displayName.orEmpty()}")
             }
         }

@@ -28,6 +28,7 @@ fun HomeScreen(
     onLogout: () -> Unit,
 ) {
     val user = uiState.session.user
+    val displayedEmail = uiState.session.profile?.gmail ?: user?.gmail.orEmpty()
 
     Column(
         modifier = Modifier
@@ -52,7 +53,7 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
                 Text(
-                    text = user?.gmail.orEmpty(),
+                    text = displayedEmail,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                 )

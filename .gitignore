@@ -1,9 +1,12 @@
 # Android / Gradle
 .gradle/
 .gradle-user/
+.gradle-user-home/
+.gradle-user-home*/
 .android-user/
 build/
 app/build/
+app/release/
 local.properties
 *.iml
 

@@ -7,25 +7,13 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.timindonesiacerdas.ticcollect.auth.AuthViewModel
-import com.timindonesiacerdas.ticcollect.auth.LoginScreen
-import com.timindonesiacerdas.ticcollect.auth.WelcomeScreen
-import com.timindonesiacerdas.ticcollect.camera.KtpCameraScreen
-import com.timindonesiacerdas.ticcollect.camera.PhotoCaptureScreen
-import com.timindonesiacerdas.ticcollect.camera.SelfieCameraScreen
-import com.timindonesiacerdas.ticcollect.camera.VideoCaptureScreen
+import com.timindonesiacerdas.ticcollect.auth.*
+import com.timindonesiacerdas.ticcollect.camera.*
 import com.timindonesiacerdas.ticcollect.form.FormScreen
-import com.timindonesiacerdas.ticcollect.home.HomeScreen
-import com.timindonesiacerdas.ticcollect.home.HomeViewModel
-import com.timindonesiacerdas.ticcollect.home.ProfileScreen
-import com.timindonesiacerdas.ticcollect.home.SubmissionHistoryScreen
+import com.timindonesiacerdas.ticcollect.home.*
 import com.timindonesiacerdas.ticcollect.location.GpsCaptureScreen
-import com.timindonesiacerdas.ticcollect.registration.RegistrationScreen
-import com.timindonesiacerdas.ticcollect.registration.RegistrationViewModel
-import com.timindonesiacerdas.ticcollect.registration.RejectedScreen
-import com.timindonesiacerdas.ticcollect.registration.WaitingApprovalScreen
-import com.timindonesiacerdas.ticcollect.upload.PendingUploadScreen
-import com.timindonesiacerdas.ticcollect.upload.UploadViewModel
+import com.timindonesiacerdas.ticcollect.registration.*
+import com.timindonesiacerdas.ticcollect.upload.*
 
 @Composable
 fun TicNavGraph(
@@ -81,6 +69,7 @@ fun TicNavGraph(
                 onBack = { navController.popBackStack() },
                 onCaptureKtp = { navController.navigate(TicRoutes.KtpCamera) },
                 onCaptureSelfie = { navController.navigate(TicRoutes.SelfieCamera) },
+                onGmailChanged = registrationViewModel::onGmailChanged,
                 onNikChanged = registrationViewModel::onNikChanged,
                 onNamaChanged = registrationViewModel::onNamaChanged,
                 onAlamatChanged = registrationViewModel::onAlamatChanged,

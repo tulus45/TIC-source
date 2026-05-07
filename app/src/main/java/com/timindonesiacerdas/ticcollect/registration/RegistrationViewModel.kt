@@ -90,7 +90,9 @@ class RegistrationViewModel(
                     } else {
                         current.copy(
                             uid = user.uid,
-                            gmail = user.gmail,
+                            gmail = current.gmail.ifBlank {
+                                draft?.gmail ?: profile?.gmail ?: user.gmail
+                            },
                             displayName = user.displayName,
                             nik = current.nik.ifBlank { draft?.nik ?: profile?.nik.orEmpty() },
                             nama = current.nama.ifBlank {
@@ -121,6 +123,11 @@ class RegistrationViewModel(
 
     fun onNikChanged(value: String) {
         _uiState.update { it.copy(nik = value, errorMessage = null) }
+        persistWorkingDraft()
+    }
+
+    fun onGmailChanged(value: String) {
+        _uiState.update { it.copy(gmail = value, errorMessage = null) }
         persistWorkingDraft()
     }
 
@@ -198,7 +205,7 @@ class RegistrationViewModel(
             val updatedAt = TimeFormatter.nowStorage()
             val draft = RegistrationDraft(
                 uid = current.uid,
-                gmail = current.gmail,
+                gmail = current.gmail.trim(),
                 displayName = current.displayName,
                 nik = current.nik.trim(),
                 nama = current.nama.trim(),
@@ -323,6 +330,7 @@ class RegistrationViewModel(
 
     private fun validate(state: RegistrationUiState): String? {
         if (!state.isAuthenticated) return "Login Gmail diperlukan sebelum registrasi."
+        if (state.gmail.isBlank()) return "Email wajib diisi."
         if (state.nik.length < 8) return "NIK minimal 8 digit untuk dummy tahap 1."
         if (state.nama.isBlank()) return "Nama wajib diisi."
         if (state.alamat.isBlank()) return "Alamat wajib diisi."
@@ -344,7 +352,7 @@ class RegistrationViewModel(
         val now = TimeFormatter.nowStorage()
         val localDraft = LocalRegistrationDraft(
             uid = current.uid,
-            gmail = current.gmail,
+            gmail = current.gmail.trim(),
             displayName = current.displayName,
             nik = current.nik.trim(),
             nama = current.nama.trim(),

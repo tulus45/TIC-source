@@ -23,6 +23,7 @@ import com.timindonesiacerdas.ticcollect.data.remote.TicBackendHttpClient
 import com.timindonesiacerdas.ticcollect.utils.ImageUploadOptimizer
 import com.timindonesiacerdas.ticcollect.utils.TicConstants
 import com.timindonesiacerdas.ticcollect.utils.TimeFormatter
+import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -34,6 +35,8 @@ import kotlinx.coroutines.launch
 
 object InMemorySessionStore {
     private const val databaseName = "tic_collect.db"
+    private const val preferencesName = "tic_collect_prefs"
+    private const val demoUidKey = "demo_uid"
 
     private val storeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _session = MutableStateFlow(SessionState())
@@ -76,13 +79,18 @@ object InMemorySessionStore {
         ensureInitialized()
 
         val current = session.value
-        val demoUser = current.user ?: AuthenticatedUser(
-            uid = "tic-demo-uid-001",
-            gmail = TicConstants.demoGmail,
-            displayName = "Enumerator Demo TIC",
-            photoUrl = null,
-            firebaseIdToken = "demo-firebase-id-token",
-        )
+        val currentUser = current.user
+        val demoUser = if (currentUser != null && currentUser.uid != "tic-demo-uid-001") {
+            currentUser
+        } else {
+            AuthenticatedUser(
+                uid = getOrCreateDemoUid(),
+                gmail = "",
+                displayName = "Enumerator Demo TIC",
+                photoUrl = null,
+                firebaseIdToken = "demo-firebase-id-token",
+            )
+        }
 
         sessionDao.upsert(
             SessionEntity(
@@ -94,6 +102,18 @@ object InMemorySessionStore {
                 firebaseIdToken = demoUser.firebaseIdToken,
             ),
         )
+    }
+
+    private fun getOrCreateDemoUid(): String {
+        val preferences = application.getSharedPreferences(preferencesName, Application.MODE_PRIVATE)
+        val existingValue = preferences.getString(demoUidKey, null)?.trim().orEmpty()
+        if (existingValue.isNotBlank()) {
+            return existingValue
+        }
+
+        val generatedUid = "tic-demo-${UUID.randomUUID()}"
+        preferences.edit().putString(demoUidKey, generatedUid).apply()
+        return generatedUid
     }
 
     suspend fun saveRegistrationDraft(draft: LocalRegistrationDraft) {
