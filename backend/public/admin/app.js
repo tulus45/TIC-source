@@ -57,17 +57,10 @@ const ui = {
   metricRegistrationsPending: document.getElementById("metricRegistrationsPending"),
   metricRegistrationsApproved: document.getElementById("metricRegistrationsApproved"),
   metricRegistrationsAttention: document.getElementById("metricRegistrationsAttention"),
-  metricRegistrationAreas: document.getElementById("metricRegistrationAreas"),
   metricUploadsTotal: document.getElementById("metricUploadsTotal"),
   metricUploadsSchools: document.getElementById("metricUploadsSchools"),
   metricUploadsPendingTarget: document.getElementById("metricUploadsPendingTarget"),
   metricUploadsKabupaten: document.getElementById("metricUploadsKabupaten"),
-  metricUploadsCoverage: document.getElementById("metricUploadsCoverage"),
-  metricMasterRows: document.getElementById("metricMasterRows"),
-  metricMasterColumns: document.getElementById("metricMasterColumns"),
-  metricMasterUpdated: document.getElementById("metricMasterUpdated"),
-  metricActiveView: document.getElementById("metricActiveView"),
-  metricMasterDataset: document.getElementById("metricMasterDataset"),
   detailDrawerBackdrop: document.getElementById("detailDrawerBackdrop"),
   detailDrawer: document.getElementById("detailDrawer"),
   detailDrawerCloseButton: document.getElementById("detailDrawerCloseButton"),
@@ -1596,7 +1589,6 @@ function setActiveTab(tab) {
   ui.masterPanel.classList.toggle("hidden", !showMasterPanel);
 
   ui.heroViewName.textContent = tabs[tab].label;
-  ui.metricActiveView.textContent = tabs[tab].label;
   ui.exportButton.textContent = tabs[tab].exportLabel;
 
   refreshToolbarSummary();
@@ -1607,7 +1599,6 @@ function updateDashboardMetrics() {
   const registrationSummary = buildAreaSummary(summaryItems);
   const uploadSummary = buildSubmissionSummary(uploadItems);
   const masterRows = Array.isArray(currentMasterData?.rows) ? currentMasterData.rows.length : 0;
-  const masterColumns = Array.isArray(currentMasterData?.columns) ? currentMasterData.columns.length : 0;
 
   ui.heroRegistrationsCount.textContent = formatCompactNumber(registrationSummary.totals.total);
   ui.heroUploadsCount.textContent = formatCompactNumber(uploadItems.length);
@@ -1619,24 +1610,11 @@ function updateDashboardMetrics() {
   ui.metricRegistrationsAttention.textContent = formatCompactNumber(
     registrationSummary.totals.rejected + registrationSummary.totals.suspended,
   );
-  ui.metricRegistrationAreas.textContent = registrationSummary.rows.length
-    ? `${registrationSummary.rows.length} area kerja aktif pada data registrasi.`
-    : "Belum ada area kerja yang masuk.";
 
   ui.metricUploadsTotal.textContent = formatCompactNumber(uploadItems.length);
   ui.metricUploadsSchools.textContent = formatCompactNumber(uploadSummary.totals.achv);
   ui.metricUploadsPendingTarget.textContent = formatCompactNumber(uploadSummary.totals.toBeAchv);
   ui.metricUploadsKabupaten.textContent = formatCompactNumber(uploadSummary.rows.length);
-  ui.metricUploadsCoverage.textContent = uploadSummary.rows.length
-    ? `${uploadSummary.totals.achv} sekolah achieved dari ${uploadSummary.totals.target} target master.`
-    : "Target upload akan muncul setelah master data aktif.";
-
-  ui.metricMasterRows.textContent = formatCompactNumber(masterRows);
-  ui.metricMasterColumns.textContent = formatCompactNumber(masterColumns);
-  ui.metricMasterUpdated.textContent = currentMasterData?.updatedAt ? formatDate(currentMasterData.updatedAt) : "-";
-  ui.metricMasterDataset.textContent = currentMasterData?.title
-    ? `${currentMasterData.title} dengan ${masterColumns} level cascading aktif.`
-    : "Belum ada dataset master yang aktif.";
 }
 
 function touchLastSync() {
