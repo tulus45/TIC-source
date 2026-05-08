@@ -29,6 +29,8 @@ const bundledSchoolMasterFile = path.join(rootDir, "data", "school_master.json")
 const schoolMasterFile = path.join(dataDir, "school_master.json");
 const adminSessionCookieName = "tic_admin_session";
 const adminSessionMaxAgeMs = 1000 * 60 * 60 * 12;
+const defaultAdminUsername = "admin";
+const defaultAdminPassword = "password##45";
 
 const staticContentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -351,12 +353,14 @@ function normalizeNonNegativeInteger(value) {
 }
 
 function getAdminAuthConfig() {
-  const username = typeof process.env.ADMIN_USERNAME === "string"
+  const envUsername = typeof process.env.ADMIN_USERNAME === "string"
     ? process.env.ADMIN_USERNAME.trim()
     : "";
-  const password = typeof process.env.ADMIN_PASSWORD === "string"
+  const envPassword = typeof process.env.ADMIN_PASSWORD === "string"
     ? process.env.ADMIN_PASSWORD.trim()
     : "";
+  const username = envUsername || defaultAdminUsername;
+  const password = envPassword || defaultAdminPassword;
   const secret = typeof process.env.ADMIN_SESSION_SECRET === "string"
     ? process.env.ADMIN_SESSION_SECRET.trim()
     : "";
