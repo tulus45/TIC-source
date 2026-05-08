@@ -103,6 +103,13 @@ a {
   z-index: 1;
 }
 
+.hero__topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
 .hero__badge,
 .hero__meta-pill,
 .insight-card__badge {
