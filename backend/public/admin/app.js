@@ -290,8 +290,8 @@ function renderSummary(items) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="cell-wrap cell-strong">${escapeHtml(row.areaKerja)}</td>
-      <td class="cell-nowrap">${row.pending}</td>
       <td class="cell-nowrap">${row.approved}</td>
+      <td class="cell-nowrap">${row.pending}</td>
       <td class="cell-nowrap">${row.rejected}</td>
       <td class="cell-nowrap">${row.suspended}</td>
       <td class="cell-nowrap cell-strong">${row.total}</td>
@@ -303,8 +303,8 @@ function renderSummary(items) {
   totalRow.className = "summary-total-row";
   totalRow.innerHTML = `
     <td class="cell-wrap cell-strong">Total</td>
-    <td class="cell-nowrap cell-strong">${totals.pending}</td>
     <td class="cell-nowrap cell-strong">${totals.approved}</td>
+    <td class="cell-nowrap cell-strong">${totals.pending}</td>
     <td class="cell-nowrap cell-strong">${totals.rejected}</td>
     <td class="cell-nowrap cell-strong">${totals.suspended}</td>
     <td class="cell-nowrap cell-strong">${totals.total}</td>
@@ -645,6 +645,14 @@ function refreshToolbarSummary() {
 }
 
 function updateExportButtonState(isLoading = false) {
+  const showExportButton = activeTab !== "summary-registrations";
+  ui.exportButton.classList.toggle("hidden", !showExportButton);
+
+  if (!showExportButton) {
+    ui.exportButton.disabled = true;
+    return;
+  }
+
   const hasRows = activeTab === "summary-registrations"
     ? summaryItems.length > 0
     : activeTab === "detail-registrations"
@@ -1152,8 +1160,8 @@ function exportSummaryToExcel() {
   const rowsHtml = rows.map((row) => {
     const values = [
       row.areaKerja,
-      row.pending,
       row.approved,
+      row.pending,
       row.rejected,
       row.suspended,
       row.total,
@@ -1172,8 +1180,8 @@ function exportSummaryToExcel() {
           <thead>
             <tr>
               <th>Area Kerja</th>
-              <th>Pending</th>
               <th>Approved</th>
+              <th>Pending</th>
               <th>Rejected</th>
               <th>Suspended</th>
               <th>Total</th>
@@ -1183,8 +1191,8 @@ function exportSummaryToExcel() {
             ${rowsHtml}
             <tr>
               <td><strong>Total</strong></td>
-              <td><strong>${totals.pending}</strong></td>
               <td><strong>${totals.approved}</strong></td>
+              <td><strong>${totals.pending}</strong></td>
               <td><strong>${totals.rejected}</strong></td>
               <td><strong>${totals.suspended}</strong></td>
               <td><strong>${totals.total}</strong></td>
@@ -1634,7 +1642,7 @@ function setActiveTab(tab) {
   const tabs = {
     "summary-registrations": {
       label: "Summary Registrasi",
-      exportLabel: "Export Summary Registrasi",
+      exportLabel: "",
     },
     "detail-registrations": {
       label: "Review Registrasi",
