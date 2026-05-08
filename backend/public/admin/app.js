@@ -7,6 +7,7 @@ const ui = {
   summaryText: document.getElementById("summaryText"),
   exportButton: document.getElementById("exportButton"),
   statusFilter: document.getElementById("statusFilter"),
+  areaKerjaFilter: document.getElementById("areaKerjaFilter"),
   registrationSearchInput: document.getElementById("registrationSearchInput"),
   detailTabButton: document.getElementById("detailTabButton"),
   summaryTabButton: document.getElementById("summaryTabButton"),
@@ -83,6 +84,7 @@ const ui = {
 };
 
 const statusFilterField = ui.statusFilter.closest(".toolbar__field");
+const areaKerjaFilterField = ui.areaKerjaFilter.closest(".toolbar__field");
 const registrationSearchField = ui.registrationSearchInput.closest(".toolbar__field");
 
 let currentItems = [];
@@ -121,6 +123,7 @@ async function loadRegistrations() {
     currentItems = Array.isArray(payload.items) ? payload.items : [];
     summaryItems = Array.isArray(summaryPayload.items) ? summaryPayload.items : [];
 
+    populateAreaKerjaFilterOptions(summaryItems);
     renderRows();
     renderSummary(summaryItems);
     renderSubmissionRows(uploadItems);
@@ -131,6 +134,7 @@ async function loadRegistrations() {
   } catch (error) {
     currentItems = [];
     summaryItems = [];
+    populateAreaKerjaFilterOptions([]);
     renderRows();
     renderSummary([]);
     refreshToolbarSummary();
@@ -306,6 +310,31 @@ function renderSummary(items) {
     <td class="cell-nowrap cell-strong">${totals.total}</td>
   `;
   ui.summaryBody.appendChild(totalRow);
+}
+
+function populateAreaKerjaFilterOptions(items) {
+  const selectedValue = ui.areaKerjaFilter.value;
+  const areaOptions = [...new Set(
+    items
+      .map((item) => getRegistrationAreaLabel(item))
+      .filter(Boolean),
+  )].sort((left, right) => left.localeCompare(right, "id-ID"));
+
+  ui.areaKerjaFilter.innerHTML = "";
+
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent = "Semua Area";
+  ui.areaKerjaFilter.appendChild(defaultOption);
+
+  areaOptions.forEach((area) => {
+    const option = document.createElement("option");
+    option.value = area;
+    option.textContent = area;
+    ui.areaKerjaFilter.appendChild(option);
+  });
+
+  ui.areaKerjaFilter.value = areaOptions.includes(selectedValue) ? selectedValue : "";
 }
 
 function renderSubmissionRows(items) {
@@ -590,13 +619,14 @@ function refreshToolbarSummary() {
     const totalCount = summaryItems.length;
     const hasSearch = Boolean(ui.registrationSearchInput.value.trim());
     const hasStatusFilter = Boolean(ui.statusFilter.value);
+    const hasAreaKerjaFilter = Boolean(ui.areaKerjaFilter.value);
 
     if (!filteredCount) {
       ui.summaryText.textContent = "Belum ada registrasi yang cocok dengan filter status saat ini.";
       return;
     }
 
-    if (hasSearch) {
+    if (hasSearch || hasAreaKerjaFilter) {
       ui.summaryText.textContent = `${visibleCount} data tampil dari ${filteredCount} registrasi sesuai status, ${totalCount} total registrasi.`;
       return;
     }
@@ -1605,11 +1635,18 @@ function normalizeSearchValue(value) {
 
 function getVisibleRegistrationItems() {
   const searchTerm = normalizeSearchValue(ui.registrationSearchInput.value);
-  if (!searchTerm) {
-    return [...currentItems];
-  }
+  const areaKerja = ui.areaKerjaFilter.value;
 
   return currentItems.filter((item) => {
+    const matchesAreaKerja = !areaKerja || getRegistrationAreaLabel(item) === areaKerja;
+    if (!matchesAreaKerja) {
+      return false;
+    }
+
+    if (!searchTerm) {
+      return true;
+    }
+
     const haystack = normalizeSearchValue([
       item.registrationId,
       item.uid,
@@ -1622,6 +1659,10 @@ function getVisibleRegistrationItems() {
     ].join(" "));
     return haystack.includes(searchTerm);
   });
+}
+
+function getRegistrationAreaLabel(item) {
+  return String(item?.areaKerja || item?.kabupaten || "").trim();
 }
 
 function getSubmissionRawItems(items) {
@@ -1679,6 +1720,7 @@ function setActiveTab(tab) {
   ui.detailToolbar.classList.toggle("hidden", showMasterPanel || showRegistrationSummary);
   ui.summaryText.classList.toggle("hidden", showRegistrationDetail);
   statusFilterField.classList.toggle("hidden", !showRegistrationDetail);
+  areaKerjaFilterField.classList.toggle("hidden", !showRegistrationDetail);
   registrationSearchField.classList.toggle("hidden", !showRegistrationDetail);
   ui.summaryPanel.classList.toggle("hidden", !showRegistrationSummary);
   ui.detailPanel.classList.toggle("hidden", !showRegistrationDetail);
@@ -1793,6 +1835,10 @@ function escapeHtml(value) {
 }
 
 ui.statusFilter.addEventListener("change", loadRegistrations);
+ui.areaKerjaFilter.addEventListener("change", () => {
+  renderRows();
+  refreshToolbarSummary();
+});
 ui.registrationSearchInput.addEventListener("input", () => {
   renderRows();
   refreshToolbarSummary();
