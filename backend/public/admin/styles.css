@@ -436,6 +436,13 @@ a {
   color: var(--primary-strong);
 }
 
+.button--ghost {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: none;
+}
+
 .button--approve {
   background: var(--success-soft);
   color: var(--success);

@@ -1,7 +1,7 @@
 const http = require("node:http");
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const { randomUUID } = require("node:crypto");
+const { createHmac, randomUUID, timingSafeEqual } = require("node:crypto");
 const { URL } = require("node:url");
 const XLSX = require("xlsx-js-style");
 
@@ -27,6 +27,8 @@ const submissionsFile = path.join(dataDir, "submissions.json");
 const registrationAreaNeedsFile = path.join(dataDir, "registration_area_needs.json");
 const bundledSchoolMasterFile = path.join(rootDir, "data", "school_master.json");
 const schoolMasterFile = path.join(dataDir, "school_master.json");
+const adminSessionCookieName = "tic_admin_session";
+const adminSessionMaxAgeMs = 1000 * 60 * 60 * 12;
 
 const staticContentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -260,24 +262,35 @@ function parseSchoolMasterWorkbook(fileBuffer) {
   };
 }
 
-function sendJson(res, statusCode, payload) {
+function sendJson(res, statusCode, payload, extraHeaders = {}) {
   res.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    ...extraHeaders,
   });
   res.end(JSON.stringify(payload));
 }
 
-function sendText(res, statusCode, text) {
+function sendText(res, statusCode, text, extraHeaders = {}) {
   res.writeHead(statusCode, {
     "Content-Type": "text/plain; charset=utf-8",
     "Cache-Control": "no-store",
     "Access-Control-Allow-Origin": "*",
+    ...extraHeaders,
   });
   res.end(text);
+}
+
+function sendRedirect(res, location, extraHeaders = {}) {
+  res.writeHead(302, {
+    Location: location,
+    "Cache-Control": "no-store",
+    ...extraHeaders,
+  });
+  res.end();
 }
 
 async function sendStatic(res, relativePath) {
@@ -335,6 +348,140 @@ function normalizeNonNegativeInteger(value) {
   }
 
   return Math.max(0, Math.trunc(number));
+}
+
+function getAdminAuthConfig() {
+  const username = typeof process.env.ADMIN_USERNAME === "string"
+    ? process.env.ADMIN_USERNAME.trim()
+    : "";
+  const password = typeof process.env.ADMIN_PASSWORD === "string"
+    ? process.env.ADMIN_PASSWORD.trim()
+    : "";
+  const secret = typeof process.env.ADMIN_SESSION_SECRET === "string"
+    ? process.env.ADMIN_SESSION_SECRET.trim()
+    : "";
+
+  return {
+    enabled: Boolean(username && password),
+    username,
+    password,
+    secret: secret || `${username}:${password}:${storageRoot}`,
+  };
+}
+
+function parseCookies(req) {
+  const rawCookieHeader = typeof req.headers.cookie === "string" ? req.headers.cookie : "";
+  return rawCookieHeader
+    .split(";")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .reduce((accumulator, entry) => {
+      const separatorIndex = entry.indexOf("=");
+      if (separatorIndex < 0) {
+        return accumulator;
+      }
+
+      const name = entry.slice(0, separatorIndex).trim();
+      const value = entry.slice(separatorIndex + 1).trim();
+      if (!name) {
+        return accumulator;
+      }
+
+      try {
+        accumulator[name] = decodeURIComponent(value);
+      } catch {
+        accumulator[name] = value;
+      }
+      return accumulator;
+    }, {});
+}
+
+function safeTimingEqual(leftValue, rightValue) {
+  const leftBuffer = Buffer.from(String(leftValue || ""));
+  const rightBuffer = Buffer.from(String(rightValue || ""));
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function signAdminSessionPayload(encodedPayload, secret) {
+  return createHmac("sha256", secret).update(encodedPayload).digest("base64url");
+}
+
+function createAdminSessionValue(username, secret) {
+  const encodedPayload = Buffer.from(JSON.stringify({
+    username,
+    expiresAt: Date.now() + adminSessionMaxAgeMs,
+  }), "utf8").toString("base64url");
+  const signature = signAdminSessionPayload(encodedPayload, secret);
+  return `${encodedPayload}.${signature}`;
+}
+
+function verifyAdminSessionValue(sessionValue, config) {
+  if (!sessionValue) {
+    return false;
+  }
+
+  const [encodedPayload, signature] = String(sessionValue).split(".");
+  if (!encodedPayload || !signature) {
+    return false;
+  }
+
+  const expectedSignature = signAdminSessionPayload(encodedPayload, config.secret);
+  if (!safeTimingEqual(signature, expectedSignature)) {
+    return false;
+  }
+
+  try {
+    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+    if (payload.username !== config.username) {
+      return false;
+    }
+
+    const expiresAt = Number(payload.expiresAt);
+    return Number.isFinite(expiresAt) && expiresAt > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+function isSecureRequest(req) {
+  const forwardedProto = typeof req.headers["x-forwarded-proto"] === "string"
+    ? req.headers["x-forwarded-proto"]
+    : "";
+  return forwardedProto.toLowerCase().includes("https");
+}
+
+function buildAdminSessionCookie(req, value, maxAgeMs) {
+  const cookieParts = [
+    `${adminSessionCookieName}=${encodeURIComponent(value)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${Math.max(0, Math.floor(maxAgeMs / 1000))}`,
+  ];
+
+  if (isSecureRequest(req)) {
+    cookieParts.push("Secure");
+  }
+
+  return cookieParts.join("; ");
+}
+
+function expireAdminSessionCookie(req) {
+  return buildAdminSessionCookie(req, "", 0);
+}
+
+function isAdminAuthenticated(req) {
+  const config = getAdminAuthConfig();
+  if (!config.enabled) {
+    return true;
+  }
+
+  const cookies = parseCookies(req);
+  return verifyAdminSessionValue(cookies[adminSessionCookieName], config);
 }
 
 function normalizeAssetUrl(value) {
@@ -596,6 +743,63 @@ async function handleApi(req, res, url) {
       timestamp: new Date().toISOString(),
     });
     return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/login") {
+    const adminConfig = getAdminAuthConfig();
+    if (!adminConfig.enabled) {
+      sendJson(res, 503, { error: "Login admin belum dikonfigurasi di server." });
+      return;
+    }
+
+    let body = {};
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      body = {};
+    }
+
+    const username = normalizeString(body.username);
+    const password = normalizeString(body.password);
+    const isValidUsername = safeTimingEqual(username, adminConfig.username);
+    const isValidPassword = safeTimingEqual(password, adminConfig.password);
+
+    if (!isValidUsername || !isValidPassword) {
+      sendJson(res, 401, { error: "Username atau password salah." });
+      return;
+    }
+
+    const sessionValue = createAdminSessionValue(adminConfig.username, adminConfig.secret);
+    sendJson(
+      res,
+      200,
+      { ok: true, username: adminConfig.username },
+      { "Set-Cookie": buildAdminSessionCookie(req, sessionValue, adminSessionMaxAgeMs) },
+    );
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/logout") {
+    sendJson(
+      res,
+      200,
+      { ok: true },
+      { "Set-Cookie": expireAdminSessionCookie(req) },
+    );
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/admin/")) {
+    const adminConfig = getAdminAuthConfig();
+    if (adminConfig.enabled && !isAdminAuthenticated(req)) {
+      sendJson(
+        res,
+        401,
+        { error: "Sesi admin tidak valid atau sudah berakhir." },
+        { "Set-Cookie": expireAdminSessionCookie(req) },
+      );
+      return;
+    }
   }
 
   if (req.method === "POST" && url.pathname === "/api/uploads/registration-assets") {
@@ -959,13 +1163,31 @@ async function handleApi(req, res, url) {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url || "/", `http://${req.headers.host || `${HOST}:${PORT}`}`);
+    const adminConfig = getAdminAuthConfig();
 
     if (url.pathname.startsWith("/api/")) {
       await handleApi(req, res, url);
       return;
     }
 
-    if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/admin")) {
+    if (req.method === "GET" && (url.pathname === "/login" || url.pathname === "/login.html")) {
+      if (!adminConfig.enabled || isAdminAuthenticated(req)) {
+        sendRedirect(res, "/admin");
+        return;
+      }
+
+      await sendStatic(res, "login.html");
+      return;
+    }
+
+    if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/admin" || url.pathname === "/admin/" || url.pathname === "/admin/index.html")) {
+      if (adminConfig.enabled && !isAdminAuthenticated(req)) {
+        sendRedirect(res, `/login?next=${encodeURIComponent("/admin")}`, {
+          "Set-Cookie": expireAdminSessionCookie(req),
+        });
+        return;
+      }
+
       await sendStatic(res, "admin/index.html");
       return;
     }

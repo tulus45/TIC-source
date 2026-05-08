@@ -51,6 +51,7 @@ const ui = {
   rowTemplate: document.getElementById("rowTemplate"),
   heroViewName: document.getElementById("heroViewName"),
   heroLastSync: document.getElementById("heroLastSync"),
+  logoutButton: document.getElementById("logoutButton"),
   heroRegistrationsCount: document.getElementById("heroRegistrationsCount"),
   heroUploadsCount: document.getElementById("heroUploadsCount"),
   heroMasterRowsCount: document.getElementById("heroMasterRowsCount"),
@@ -97,19 +98,37 @@ let currentMasterData = null;
 let selectedRegistrationId = null;
 let lastSyncAt = "";
 
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    ...options,
+  });
+
+  if (response.status === 401) {
+    window.location.href = `/login?next=${encodeURIComponent("/admin")}`;
+    throw new Error("Sesi admin berakhir.");
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  const payload = contentType.includes("application/json")
+    ? await response.json()
+    : { error: await response.text() };
+
+  return { response, payload };
+}
+
 async function loadRegistrations() {
   setLoading(true);
   hideError();
 
   try {
     const query = ui.statusFilter.value ? `?status=${encodeURIComponent(ui.statusFilter.value)}` : "";
-    const [response, summaryResponse] = await Promise.all([
-      fetch(`/api/admin/registrations${query}`),
-      fetch("/api/admin/registrations"),
-    ]);
-    const [payload, summaryPayload] = await Promise.all([
-      response.json(),
-      summaryResponse.json(),
+    const [
+      { response, payload },
+      { response: summaryResponse, payload: summaryPayload },
+    ] = await Promise.all([
+      fetchJson(`/api/admin/registrations${query}`),
+      fetchJson("/api/admin/registrations"),
     ]);
 
     if (!response.ok) {
@@ -154,8 +173,7 @@ async function loadSubmissions() {
   hideError();
 
   try {
-    const response = await fetch("/api/admin/submissions");
-    const payload = await response.json();
+    const { response, payload } = await fetchJson("/api/admin/submissions");
 
     if (!response.ok) {
       throw new Error(payload.error || "Gagal memuat data upload.");
@@ -183,8 +201,7 @@ async function loadSubmissions() {
 
 async function loadMasterDataInfo() {
   try {
-    const response = await fetch("/api/master-data/schools");
-    const payload = await response.json();
+    const { response, payload } = await fetchJson("/api/master-data/schools");
 
     if (!response.ok) {
       throw new Error(payload.error || "Gagal memuat master data sekolah.");
@@ -521,15 +538,13 @@ async function saveSelectedRegistrationNote() {
   ui.drawerNoteSaveButton.disabled = true;
 
   try {
-    const response = await fetch(`/api/admin/registrations/${item.registrationId}/note`, {
+    const { response, payload } = await fetchJson(`/api/admin/registrations/${item.registrationId}/note`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ adminNote }),
     });
-
-    const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.error || "Gagal menyimpan catatan.");
     }
@@ -569,15 +584,13 @@ async function updateSelectedRegistrationStatus(action) {
   setDrawerActionLoading(true);
 
   try {
-    const response = await fetch(`/api/admin/registrations/${item.registrationId}/${action}`, {
+    const { response, payload } = await fetchJson(`/api/admin/registrations/${item.registrationId}/${action}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ adminNote }),
     });
-
-    const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.error || "Gagal memperbarui status.");
     }
@@ -1718,7 +1731,7 @@ async function saveRegistrationAreaNeed(areaKerja, input) {
   input.dataset.state = "saving";
 
   try {
-    const response = await fetch("/api/admin/registration-area-needs", {
+    const { response, payload } = await fetchJson("/api/admin/registration-area-needs", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1728,8 +1741,6 @@ async function saveRegistrationAreaNeed(areaKerja, input) {
         requiredCount: nextValue,
       }),
     });
-
-    const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.error || "Gagal menyimpan kebutuhan teknisi.");
     }
@@ -1955,6 +1966,20 @@ function touchLastSync() {
   ui.heroLastSync.textContent = `Sinkron terakhir ${formatDate(lastSyncAt)}`;
 }
 
+async function logoutAdmin() {
+  ui.logoutButton.disabled = true;
+
+  try {
+    await fetchJson("/api/admin/logout", {
+      method: "POST",
+    });
+  } catch {
+    // Redirect anyway so the session is cleared from the browser flow.
+  } finally {
+    window.location.href = "/login";
+  }
+}
+
 async function uploadMasterDataExcel() {
   const file = ui.masterFileInput.files?.[0];
   if (!file) {
@@ -1969,7 +1994,7 @@ async function uploadMasterDataExcel() {
 
   try {
     const base64Data = await readFileAsBase64(file);
-    const response = await fetch("/api/admin/master-data/schools/upload", {
+    const { response, payload } = await fetchJson("/api/admin/master-data/schools/upload", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1979,7 +2004,6 @@ async function uploadMasterDataExcel() {
         base64Data,
       }),
     });
-    const payload = await response.json();
 
     if (!response.ok) {
       throw new Error(payload.details || payload.error || "Upload Excel gagal.");
@@ -2034,6 +2058,7 @@ ui.registrationSearchInput.addEventListener("input", () => {
   renderRows();
   refreshToolbarSummary();
 });
+ui.logoutButton.addEventListener("click", logoutAdmin);
 ui.exportButton.addEventListener("click", exportToExcel);
 ui.summaryTabButton.addEventListener("click", () => setActiveTab("summary-registrations"));
 ui.detailTabButton.addEventListener("click", () => setActiveTab("detail-registrations"));
