@@ -35,6 +35,11 @@ const ui = {
   uploadBreakdownHead: document.getElementById("uploadBreakdownHead"),
   uploadBreakdownBody: document.getElementById("uploadBreakdownBody"),
   uploadBreakdownEmptyState: document.getElementById("uploadBreakdownEmptyState"),
+  uploadRawToolbar: document.getElementById("uploadRawToolbar"),
+  rawKabupatenFilter: document.getElementById("rawKabupatenFilter"),
+  rawStatusFilter: document.getElementById("rawStatusFilter"),
+  rawSearchInput: document.getElementById("rawSearchInput"),
+  rawExportButton: document.getElementById("rawExportButton"),
   uploadRawPanel: document.getElementById("uploadRawPanel"),
   uploadTableScroll: document.getElementById("uploadTableScroll"),
   uploadTableHead: document.getElementById("uploadTableHead"),
@@ -68,13 +73,16 @@ const ui = {
   detailPreviewStage: document.getElementById("detailPreviewStage"),
   detailDrawer: document.getElementById("detailDrawer"),
   detailDrawerCloseButton: document.getElementById("detailDrawerCloseButton"),
+  previewStageTitle: document.getElementById("previewStageTitle"),
   previewStageMeta: document.getElementById("previewStageMeta"),
   previewStageAssets: document.getElementById("previewStageAssets"),
+  drawerEyebrow: document.getElementById("drawerEyebrow"),
   drawerTitle: document.getElementById("drawerTitle"),
   drawerMeta: document.getElementById("drawerMeta"),
   drawerStatusPill: document.getElementById("drawerStatusPill"),
   drawerPrimaryLabel: document.getElementById("drawerPrimaryLabel"),
   drawerUpdatedAt: document.getElementById("drawerUpdatedAt"),
+  drawerFieldsHeading: document.getElementById("drawerFieldsHeading"),
   drawerFields: document.getElementById("drawerFields"),
   drawerNoteInput: document.getElementById("drawerNoteInput"),
   drawerNoteSaveButton: document.getElementById("drawerNoteSaveButton"),
@@ -93,10 +101,12 @@ let visibleRegistrationItems = [];
 let summaryItems = [];
 let registrationAreaNeeds = {};
 let uploadItems = [];
+let visibleUploadItems = [];
 let breakdownRows = [];
 let activeTab = "summary-registrations";
 let currentMasterData = null;
-let selectedRegistrationId = null;
+let selectedDrawerRecordId = null;
+let selectedDrawerType = "";
 let lastSyncAt = "";
 
 async function fetchJson(url, options = {}) {
@@ -359,20 +369,111 @@ function populateAreaKerjaFilterOptions(items) {
   ui.areaKerjaFilter.value = areaOptions.includes(selectedValue) ? selectedValue : "";
 }
 
+function getSubmissionReviewStatus(item) {
+  const normalized = String(item?.reviewStatus || "").trim().toUpperCase();
+  return normalized || "PENDING";
+}
+
+function getSubmissionAdminNote(item) {
+  return String(item?.adminNote || item?.rejectionReason || "").trim();
+}
+
+function getSubmissionKabupaten(item) {
+  const parsed = parseSubmissionAnswers(item);
+  const { kabupatenColumn } = getMasterColumnHints();
+  const locationEntries = Object.entries(parsed.selectedLocation);
+  const matchedKabupaten = String(
+    parsed.selectedLocation[kabupatenColumn]
+      || locationEntries.find(([column]) => /kab/i.test(column))?.[1]
+      || "",
+  ).trim();
+  return matchedKabupaten || "Belum diisi";
+}
+
+function populateRawUploadKabupatenOptions(items) {
+  const currentValue = ui.rawKabupatenFilter.value;
+  const kabupatenValues = Array.from(new Set(
+    items.map((item) => getSubmissionKabupaten(item)).filter(Boolean),
+  )).sort((left, right) => left.localeCompare(right, "id"));
+
+  ui.rawKabupatenFilter.innerHTML = [
+    '<option value="">Semua Kabupaten</option>',
+    ...kabupatenValues.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`),
+  ].join("");
+
+  ui.rawKabupatenFilter.value = kabupatenValues.includes(currentValue) ? currentValue : "";
+}
+
+function filterSubmissionRawItems(items) {
+  const selectedKabupaten = ui.rawKabupatenFilter.value.trim();
+  const selectedStatus = ui.rawStatusFilter.value.trim().toUpperCase();
+  const searchTerm = normalizeSearchValue(ui.rawSearchInput.value);
+
+  return items.filter((item) => {
+    const parsed = parseSubmissionAnswers(item);
+    const identity = resolveSubmissionIdentity(item);
+    const kabupaten = getSubmissionKabupaten(item);
+    const reviewStatus = getSubmissionReviewStatus(item);
+    const noteValue = getSubmissionAdminNote(item);
+
+    if (selectedKabupaten && kabupaten !== selectedKabupaten) {
+      return false;
+    }
+
+    if (selectedStatus && reviewStatus !== selectedStatus) {
+      return false;
+    }
+
+    if (!searchTerm) {
+      return true;
+    }
+
+    const haystack = normalizeSearchValue([
+      item.submissionId,
+      item.uid,
+      identity.gmail,
+      identity.nama,
+      item.projectName,
+      item.formName,
+      reviewStatus,
+      noteValue,
+      kabupaten,
+      ...Object.values(parsed.selectedLocation),
+      parsed.gpsRecord.address,
+    ].join(" "));
+
+    return haystack.includes(searchTerm);
+  });
+}
+
 function renderSubmissionRows(items) {
   ui.uploadTableHead.innerHTML = "";
   ui.uploadTableBody.innerHTML = "";
+  populateRawUploadKabupatenOptions(items);
+  visibleUploadItems = [];
 
   if (!items.length) {
     ui.uploadTableScroll.classList.add("hidden");
     ui.uploadEmptyState.classList.remove("hidden");
+    ui.uploadEmptyState.textContent = "Belum ada raw data upload yang masuk.";
+    updateExportButtonState();
+    return;
+  }
+
+  const filteredItems = filterSubmissionRawItems(items);
+  if (!filteredItems.length) {
+    ui.uploadTableScroll.classList.add("hidden");
+    ui.uploadEmptyState.classList.remove("hidden");
+    ui.uploadEmptyState.textContent = "Tidak ada raw upload yang cocok dengan filter atau pencarian.";
+    updateExportButtonState();
     return;
   }
 
   ui.uploadTableScroll.classList.remove("hidden");
   ui.uploadEmptyState.classList.add("hidden");
 
-  const orderedItems = getSubmissionRawItems(items);
+  const orderedItems = getSubmissionRawItems(filteredItems);
+  visibleUploadItems = orderedItems;
   const locationColumns = getSubmissionLocationColumns(orderedItems);
   const photoColumns = getSubmissionPhotoColumns(orderedItems);
   const headerColumns = [
@@ -381,6 +482,8 @@ function renderSubmissionRows(items) {
     "UID",
     "Email",
     "Nama",
+    "Status",
+    "Note",
     ...locationColumns,
     ...photoColumns,
     "GPS Timestamp",
@@ -390,6 +493,7 @@ function renderSubmissionRows(items) {
     "GPS Alamat",
     "Tanggal Disimpan",
     "Tanggal Upload",
+    "Review",
   ];
 
   const headerRow = document.createElement("tr");
@@ -407,6 +511,8 @@ function renderSubmissionRows(items) {
     cells.push(createTextCell(item.uid, "cell-code"));
     cells.push(createTextCell(identity.gmail, "cell-wrap"));
     cells.push(createTextCell(identity.nama, "cell-wrap"));
+    cells.push(createStatusCell(getSubmissionReviewStatus(item)));
+    cells.push(createTextCell(getSubmissionAdminNote(item), "cell-wrap"));
 
     locationColumns.forEach((column) => {
       cells.push(createTextCell(parsed.selectedLocation[column], "cell-wrap"));
@@ -440,9 +546,20 @@ function renderSubmissionRows(items) {
     cells.push(createTextCell(formatDate(item.createdAt), "cell-nowrap"));
     cells.push(createTextCell(formatDate(item.uploadedAt), "cell-nowrap"));
 
+    const reviewCell = document.createElement("td");
+    const reviewButton = document.createElement("button");
+    reviewButton.type = "button";
+    reviewButton.className = "button button--secondary button--small";
+    reviewButton.textContent = "Review";
+    reviewButton.addEventListener("click", () => openSubmissionDrawer(item));
+    reviewCell.appendChild(reviewButton);
+    cells.push(reviewCell);
+
     cells.forEach((cell) => tr.appendChild(cell));
     ui.uploadTableBody.appendChild(tr);
   });
+
+  updateExportButtonState();
 }
 
 function renderSubmissionSummary(items) {
@@ -493,7 +610,6 @@ function renderSubmissionBreakdown(rows) {
   if (!rows.length) {
     ui.uploadBreakdownScroll.classList.add("hidden");
     ui.uploadBreakdownEmptyState.classList.remove("hidden");
-    ui.breakdownSummaryText.textContent = "Belum ada master data sekolah untuk diringkas.";
     updateExportButtonState();
     return;
   }
@@ -509,14 +625,12 @@ function renderSubmissionBreakdown(rows) {
   if (!filteredRows.length) {
     ui.uploadBreakdownScroll.classList.add("hidden");
     ui.uploadBreakdownEmptyState.classList.remove("hidden");
-    ui.breakdownSummaryText.textContent = "Tidak ada sekolah yang cocok dengan filter atau pencarian.";
     updateExportButtonState();
     return;
   }
 
   ui.uploadBreakdownScroll.classList.remove("hidden");
   ui.uploadBreakdownEmptyState.classList.add("hidden");
-  ui.breakdownSummaryText.textContent = `${filteredRows.length} dari ${rows.length} sekolah tampil`;
 
   filteredRows.forEach((row) => {
     const tr = document.createElement("tr");
@@ -531,7 +645,7 @@ function renderSubmissionBreakdown(rows) {
 }
 
 async function saveSelectedRegistrationNote() {
-  const item = findRegistrationById(selectedRegistrationId);
+  const item = findSelectedDrawerItem();
   if (!item) return;
 
   const adminNote = ui.drawerNoteInput.value.trim();
@@ -539,7 +653,11 @@ async function saveSelectedRegistrationNote() {
   ui.drawerNoteSaveButton.disabled = true;
 
   try {
-    const { response, payload } = await fetchJson(`/api/admin/registrations/${item.registrationId}/note`, {
+    const recordId = selectedDrawerType === "submission" ? item.submissionId : item.registrationId;
+    const endpoint = selectedDrawerType === "submission"
+      ? `/api/admin/submissions/${encodeURIComponent(recordId)}/note`
+      : `/api/admin/registrations/${recordId}/note`;
+    const { response, payload } = await fetchJson(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -550,14 +668,25 @@ async function saveSelectedRegistrationNote() {
       throw new Error(payload.error || "Gagal menyimpan catatan.");
     }
 
-    mergeRegistrationRecord({
-      registrationId: item.registrationId,
-      adminNote: payload.adminNote || "",
-      rejectionReason: payload.rejectionReason || item.rejectionReason || "",
-      updatedAt: payload.updatedAt || item.updatedAt,
-    });
+    if (selectedDrawerType === "submission") {
+      mergeSubmissionRecord({
+        submissionId: item.submissionId,
+        reviewStatus: payload.reviewStatus || getSubmissionReviewStatus(item),
+        adminNote: payload.adminNote || "",
+        rejectionReason: payload.rejectionReason || item.rejectionReason || "",
+        updatedAt: payload.updatedAt || item.updatedAt,
+      });
+      renderSubmissionRows(uploadItems);
+    } else {
+      mergeRegistrationRecord({
+        registrationId: item.registrationId,
+        adminNote: payload.adminNote || "",
+        rejectionReason: payload.rejectionReason || item.rejectionReason || "",
+        updatedAt: payload.updatedAt || item.updatedAt,
+      });
+      renderRows();
+    }
 
-    renderRows();
     refreshToolbarSummary();
     refreshSelectedRegistration("Tersimpan");
     updateDashboardMetrics();
@@ -571,7 +700,7 @@ async function saveSelectedRegistrationNote() {
 }
 
 async function updateSelectedRegistrationStatus(action) {
-  const item = findRegistrationById(selectedRegistrationId);
+  const item = findSelectedDrawerItem();
   if (!item) return;
 
   const adminNote = ui.drawerNoteInput.value.trim();
@@ -585,7 +714,11 @@ async function updateSelectedRegistrationStatus(action) {
   setDrawerActionLoading(true);
 
   try {
-    const { response, payload } = await fetchJson(`/api/admin/registrations/${item.registrationId}/${action}`, {
+    const recordId = selectedDrawerType === "submission" ? item.submissionId : item.registrationId;
+    const endpoint = selectedDrawerType === "submission"
+      ? `/api/admin/submissions/${encodeURIComponent(recordId)}/${action}`
+      : `/api/admin/registrations/${recordId}/${action}`;
+    const { response, payload } = await fetchJson(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -596,7 +729,19 @@ async function updateSelectedRegistrationStatus(action) {
       throw new Error(payload.error || "Gagal memperbarui status.");
     }
 
-    await loadRegistrations();
+    if (selectedDrawerType === "submission") {
+      mergeSubmissionRecord({
+        submissionId: item.submissionId,
+        reviewStatus: payload.reviewStatus || getSubmissionReviewStatus(item),
+        adminNote: payload.adminNote || "",
+        rejectionReason: payload.rejectionReason || item.rejectionReason || "",
+        updatedAt: payload.updatedAt || item.updatedAt,
+      });
+      renderSubmissionRows(uploadItems);
+    } else {
+      await loadRegistrations();
+    }
+
     refreshSelectedRegistration("Status berhasil diperbarui.");
     touchLastSync();
   } catch (error) {
@@ -678,23 +823,19 @@ function refreshToolbarSummary() {
     return;
   }
 
-  if (activeTab === "detail-submissions") {
-    ui.summaryText.textContent = uploadItems.length
-      ? `${uploadItems.length} raw upload tersimpan di backend.`
-      : "Belum ada raw data upload yang masuk.";
-    return;
-  }
-
   ui.summaryText.textContent = "Kelola data master sekolah dari panel ini.";
 }
 
 function updateExportButtonState(isLoading = false) {
   const showExportButton = activeTab !== "summary-registrations"
     && activeTab !== "summary-submissions"
-    && activeTab !== "breakdown-submissions";
+    && activeTab !== "breakdown-submissions"
+    && activeTab !== "detail-submissions";
   const showBreakdownExportButton = activeTab === "breakdown-submissions";
+  const showRawExportButton = activeTab === "detail-submissions";
   ui.exportButton.classList.toggle("hidden", !showExportButton);
   ui.breakdownExportButton.classList.toggle("hidden", !showBreakdownExportButton);
+  ui.rawExportButton.classList.toggle("hidden", !showRawExportButton);
 
   const hasRows = activeTab === "summary-registrations"
     ? summaryItems.length > 0
@@ -705,7 +846,7 @@ function updateExportButtonState(isLoading = false) {
         : activeTab === "breakdown-submissions"
           ? filterSubmissionBreakdownRows(breakdownRows).length > 0
           : activeTab === "detail-submissions"
-            ? uploadItems.length > 0
+            ? visibleUploadItems.length > 0
             : false;
 
   if (!showExportButton) {
@@ -716,10 +857,16 @@ function updateExportButtonState(isLoading = false) {
 
   if (!showBreakdownExportButton) {
     ui.breakdownExportButton.disabled = true;
+  } else {
+    ui.breakdownExportButton.disabled = isLoading || !hasRows;
+  }
+
+  if (!showRawExportButton) {
+    ui.rawExportButton.disabled = true;
     return;
   }
 
-  ui.breakdownExportButton.disabled = isLoading || !hasRows;
+  ui.rawExportButton.disabled = isLoading || !hasRows;
 }
 
 function formatDate(value) {
@@ -761,8 +908,22 @@ function summarizeRegistrationAssets(item) {
   };
 }
 
+function setDrawerModeCopy(mode) {
+  if (mode === "submission") {
+    ui.drawerEyebrow.textContent = "Review Upload";
+    ui.drawerFieldsHeading.textContent = "Detail upload";
+    ui.previewStageTitle.textContent = "Evidence Lapangan";
+    return;
+  }
+
+  ui.drawerEyebrow.textContent = "Review Registrasi";
+  ui.drawerFieldsHeading.textContent = "Profil teknisi";
+  ui.previewStageTitle.textContent = "KTP dan Foto Selfie";
+}
+
 function openRegistrationDrawer(item) {
-  selectedRegistrationId = item.registrationId;
+  selectedDrawerType = "registration";
+  selectedDrawerRecordId = item.registrationId;
   fillRegistrationDrawer(item);
   ui.detailPreviewStage.classList.remove("hidden");
   ui.detailDrawer.classList.remove("hidden");
@@ -772,8 +933,21 @@ function openRegistrationDrawer(item) {
   document.body.classList.add("drawer-open");
 }
 
+function openSubmissionDrawer(item) {
+  selectedDrawerType = "submission";
+  selectedDrawerRecordId = item.submissionId;
+  fillSubmissionDrawer(item);
+  ui.detailPreviewStage.classList.remove("hidden");
+  ui.detailDrawer.classList.remove("hidden");
+  ui.detailDrawerBackdrop.classList.remove("hidden");
+  ui.detailPreviewStage.setAttribute("aria-hidden", "false");
+  ui.detailDrawer.setAttribute("aria-hidden", "false");
+  document.body.classList.add("drawer-open");
+}
+
 function closeRegistrationDrawer() {
-  selectedRegistrationId = null;
+  selectedDrawerRecordId = null;
+  selectedDrawerType = "";
   ui.detailPreviewStage.classList.add("hidden");
   ui.detailDrawer.classList.add("hidden");
   ui.detailDrawerBackdrop.classList.add("hidden");
@@ -785,13 +959,18 @@ function closeRegistrationDrawer() {
 }
 
 function refreshSelectedRegistration(successMessage = "") {
-  if (!selectedRegistrationId || ui.detailDrawer.classList.contains("hidden")) {
+  if (!selectedDrawerRecordId || ui.detailDrawer.classList.contains("hidden")) {
     return;
   }
 
-  const item = findRegistrationById(selectedRegistrationId);
+  const item = findSelectedDrawerItem();
   if (!item) {
     closeRegistrationDrawer();
+    return;
+  }
+
+  if (selectedDrawerType === "submission") {
+    fillSubmissionDrawer(item, successMessage);
     return;
   }
 
@@ -799,6 +978,7 @@ function refreshSelectedRegistration(successMessage = "") {
 }
 
 function fillRegistrationDrawer(item, successMessage = "") {
+  setDrawerModeCopy("registration");
   ui.drawerStatusPill.textContent = item.status || "-";
   ui.drawerStatusPill.dataset.status = item.status || "";
   ui.drawerTitle.textContent = item.nama || item.displayName || "Tanpa nama";
@@ -808,13 +988,35 @@ function fillRegistrationDrawer(item, successMessage = "") {
   ui.drawerPrimaryLabel.textContent = item.registrationId || "-";
   ui.drawerUpdatedAt.textContent = `Diperbarui ${formatDate(item.updatedAt)}`;
   ui.drawerNoteInput.value = item.adminNote || item.rejectionReason || "";
-  renderDrawerFields(item);
-  renderPreviewStage(item);
+  renderRegistrationDrawerFields(item);
+  renderRegistrationPreviewStage(item);
   setDrawerActionAvailability(item);
   setDrawerNoteState(successMessage, successMessage ? "saved" : "");
 }
 
-function renderDrawerFields(item) {
+function fillSubmissionDrawer(item, successMessage = "") {
+  const parsed = parseSubmissionAnswers(item);
+  const identity = resolveSubmissionIdentity(item);
+  const reviewStatus = getSubmissionReviewStatus(item);
+  const kabupaten = getSubmissionKabupaten(item);
+
+  setDrawerModeCopy("submission");
+  ui.drawerStatusPill.textContent = reviewStatus;
+  ui.drawerStatusPill.dataset.status = reviewStatus;
+  ui.drawerTitle.textContent = identity.nama || item.formName || item.submissionId || "Raw upload";
+  ui.drawerMeta.textContent = [identity.gmail || "-", item.uid || "-", kabupaten]
+    .filter(Boolean)
+    .join(" â€¢ ");
+  ui.drawerPrimaryLabel.textContent = item.submissionId || "-";
+  ui.drawerUpdatedAt.textContent = `Diperbarui ${formatDate(item.updatedAt || item.uploadedAt || item.createdAt)}`;
+  ui.drawerNoteInput.value = getSubmissionAdminNote(item);
+  renderSubmissionDrawerFields(item, parsed, identity);
+  renderSubmissionPreviewStage(item, parsed, identity);
+  setDrawerActionAvailability(item);
+  setDrawerNoteState(successMessage, successMessage ? "saved" : "");
+}
+
+function renderRegistrationDrawerFields(item) {
   ui.drawerFields.innerHTML = "";
 
   const fields = [
@@ -848,13 +1050,54 @@ function renderDrawerFields(item) {
   });
 }
 
+function renderSubmissionDrawerFields(item, parsed = parseSubmissionAnswers(item), identity = resolveSubmissionIdentity(item)) {
+  ui.drawerFields.innerHTML = "";
+
+  const gpsSummary = [parsed.gpsRecord.latitude, parsed.gpsRecord.longitude]
+    .filter((value) => value !== "" && value !== null && value !== undefined)
+    .join(", ");
+  const locationSummary = Object.values(parsed.selectedLocation).filter(Boolean).join(", ");
+  const fields = [
+    ["Submission ID", item.submissionId],
+    ["Review Status", getSubmissionReviewStatus(item)],
+    ["Upload Status", item.status],
+    ["UID", item.uid],
+    ["Gmail", identity.gmail],
+    ["Nama", identity.nama || item.formName],
+    ["Project", item.projectName],
+    ["Form", item.formName],
+    ["Kabupaten", getSubmissionKabupaten(item)],
+    ["Lokasi", locationSummary],
+    ["GPS", gpsSummary],
+    ["GPS Akurasi", parsed.gpsRecord.accuracyMeters],
+    ["GPS Alamat", parsed.gpsRecord.address],
+    ["Tanggal Disimpan", formatDate(item.createdAt)],
+    ["Tanggal Upload", formatDate(item.uploadedAt)],
+    ["Update", formatDate(item.updatedAt)],
+  ];
+
+  if (item.rejectionReason) {
+    fields.push(["Alasan Terakhir", item.rejectionReason]);
+  }
+
+  fields.forEach(([label, value]) => {
+    const card = document.createElement("div");
+    card.className = "detail-item";
+    card.innerHTML = `
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value || "-")}</strong>
+    `;
+    ui.drawerFields.appendChild(card);
+  });
+}
+
 function renderDrawerAssets(item) {
   ui.drawerAssets.innerHTML = "";
   ui.drawerAssets.appendChild(createAssetCard("KTP", item.ktpDriveFileId, item.ktpLocalPath));
   ui.drawerAssets.appendChild(createAssetCard("Selfie", item.selfieDriveFileId, item.selfieLocalPath));
 }
 
-function renderPreviewStage(item) {
+function renderRegistrationPreviewStage(item) {
   ui.previewStageMeta.textContent = [
     item.nama || item.displayName || "Tanpa nama",
     item.areaKerja || item.kabupaten || "Area belum diisi",
@@ -868,6 +1111,28 @@ function renderPreviewStage(item) {
   ui.previewStageAssets.appendChild(
     createPreviewAssetCard("Preview Foto Selfie", item.selfieDriveFileId, item.selfieLocalPath),
   );
+}
+
+function renderSubmissionPreviewStage(item, parsed = parseSubmissionAnswers(item), identity = resolveSubmissionIdentity(item)) {
+  ui.previewStageMeta.textContent = [
+    identity.nama || item.formName || "Raw upload",
+    getSubmissionKabupaten(item),
+    "Klik gambar untuk membuka ukuran penuh.",
+  ].join(" â€¢ ");
+
+  ui.previewStageAssets.innerHTML = "";
+  if (!parsed.photoList.length) {
+    ui.previewStageAssets.appendChild(
+      createPreviewAssetCard("Evidence Lapangan", "", "Belum ada foto evidence tersimpan."),
+    );
+    return;
+  }
+
+  parsed.photoList.forEach((photo, index) => {
+    ui.previewStageAssets.appendChild(
+      createPreviewAssetCard(photo.title || `Evidence ${index + 1}`, photo.url, photo.filename),
+    );
+  });
 }
 
 function createAssetCard(label, remoteUrl, fallbackPath) {
@@ -979,7 +1244,7 @@ function createPreviewAssetPlaceholder(message) {
 
 function setDrawerActionAvailability(item) {
   const hasSelection = Boolean(item);
-  const status = item?.status || "";
+  const status = selectedDrawerType === "submission" ? getSubmissionReviewStatus(item) : item?.status || "";
   ui.drawerNoteInput.disabled = !hasSelection;
   ui.drawerNoteSaveButton.disabled = !hasSelection;
   ui.drawerApproveButton.disabled = !hasSelection || status === "APPROVED";
@@ -997,7 +1262,7 @@ function setDrawerActionLoading(isLoading) {
     return;
   }
 
-  const item = findRegistrationById(selectedRegistrationId);
+  const item = findSelectedDrawerItem();
   setDrawerActionAvailability(item);
 }
 
@@ -1037,6 +1302,20 @@ function findRegistrationById(registrationId) {
   return [...summaryItems, ...currentItems].find((item) => item.registrationId === registrationId) || null;
 }
 
+function findSubmissionById(submissionId) {
+  return uploadItems.find((item) => item.submissionId === submissionId) || null;
+}
+
+function findSelectedDrawerItem() {
+  if (!selectedDrawerRecordId) {
+    return null;
+  }
+
+  return selectedDrawerType === "submission"
+    ? findSubmissionById(selectedDrawerRecordId)
+    : findRegistrationById(selectedDrawerRecordId);
+}
+
 function mergeRegistrationRecord(partial) {
   const applyUpdate = (items) => items.map((item) => (
     item.registrationId === partial.registrationId ? { ...item, ...partial } : item
@@ -1044,6 +1323,12 @@ function mergeRegistrationRecord(partial) {
 
   currentItems = applyUpdate(currentItems);
   summaryItems = applyUpdate(summaryItems);
+}
+
+function mergeSubmissionRecord(partial) {
+  uploadItems = uploadItems.map((item) => (
+    item.submissionId === partial.submissionId ? { ...item, ...partial } : item
+  ));
 }
 
 function exportToExcel() {
@@ -1137,9 +1422,9 @@ function exportRegistrationsToExcel() {
 }
 
 function exportSubmissionRawToExcel() {
-  if (!uploadItems.length) return;
+  if (!visibleUploadItems.length) return;
 
-  const orderedItems = getSubmissionRawItems(uploadItems);
+  const orderedItems = getSubmissionRawItems(visibleUploadItems);
   const locationColumns = getSubmissionLocationColumns(orderedItems);
   const photoColumns = getSubmissionPhotoColumns(orderedItems);
   const headerColumns = [
@@ -1148,6 +1433,8 @@ function exportSubmissionRawToExcel() {
     "UID",
     "Email",
     "Nama",
+    "Status",
+    "Note",
     ...locationColumns,
     ...photoColumns,
     "GPS Timestamp",
@@ -1168,6 +1455,8 @@ function exportSubmissionRawToExcel() {
       item.uid || "",
       identity.gmail || "",
       identity.nama || "",
+      getSubmissionReviewStatus(item),
+      getSubmissionAdminNote(item),
       ...locationColumns.map((column) => parsed.selectedLocation[column] || ""),
       ...photoColumns.map((title) => {
         const photo = parsed.photoMap.get(title);
@@ -1930,8 +2219,8 @@ function setActiveTab(tab) {
   ui.uploadRawTabButton.setAttribute("aria-selected", showUploadRaw ? "true" : "false");
   ui.masterTabButton.setAttribute("aria-selected", showMasterPanel ? "true" : "false");
 
-  ui.detailToolbar.classList.toggle("hidden", showMasterPanel || showRegistrationSummary || showUploadSummary || showUploadBreakdown);
-  ui.summaryText.classList.toggle("hidden", showRegistrationDetail || showUploadSummary || showUploadBreakdown);
+  ui.detailToolbar.classList.toggle("hidden", showMasterPanel || showRegistrationSummary || showUploadSummary || showUploadBreakdown || showUploadRaw);
+  ui.summaryText.classList.toggle("hidden", showRegistrationDetail || showUploadSummary || showUploadBreakdown || showUploadRaw);
   statusFilterField.classList.toggle("hidden", !showRegistrationDetail);
   areaKerjaFilterField.classList.toggle("hidden", !showRegistrationDetail);
   registrationSearchField.classList.toggle("hidden", !showRegistrationDetail);
@@ -1940,12 +2229,14 @@ function setActiveTab(tab) {
   ui.uploadSummaryPanel.classList.toggle("hidden", !showUploadSummary);
   ui.uploadBreakdownToolbar.classList.toggle("hidden", !showUploadBreakdown);
   ui.uploadBreakdownPanel.classList.toggle("hidden", !showUploadBreakdown);
+  ui.uploadRawToolbar.classList.toggle("hidden", !showUploadRaw);
   ui.uploadRawPanel.classList.toggle("hidden", !showUploadRaw);
   ui.masterPanel.classList.toggle("hidden", !showMasterPanel);
 
   ui.heroViewName.textContent = tabs[tab].label;
   ui.exportButton.textContent = tabs[tab].exportLabel;
   ui.breakdownExportButton.textContent = tabs["breakdown-submissions"].exportLabel;
+  ui.rawExportButton.textContent = tabs["detail-submissions"].exportLabel;
 
   refreshToolbarSummary();
   updateExportButtonState();
@@ -2073,6 +2364,7 @@ ui.registrationSearchInput.addEventListener("input", () => {
 ui.logoutButton.addEventListener("click", logoutAdmin);
 ui.exportButton.addEventListener("click", exportToExcel);
 ui.breakdownExportButton.addEventListener("click", exportToExcel);
+ui.rawExportButton.addEventListener("click", exportToExcel);
 ui.summaryTabButton.addEventListener("click", () => setActiveTab("summary-registrations"));
 ui.detailTabButton.addEventListener("click", () => setActiveTab("detail-registrations"));
 ui.uploadSummaryTabButton.addEventListener("click", () => setActiveTab("summary-submissions"));
@@ -2082,6 +2374,9 @@ ui.masterTabButton.addEventListener("click", () => setActiveTab("master-data"));
 ui.breakdownKabupatenFilter.addEventListener("change", () => renderSubmissionBreakdown(breakdownRows));
 ui.breakdownStatusFilter.addEventListener("change", () => renderSubmissionBreakdown(breakdownRows));
 ui.breakdownSearchInput.addEventListener("input", () => renderSubmissionBreakdown(breakdownRows));
+ui.rawKabupatenFilter.addEventListener("change", () => renderSubmissionRows(uploadItems));
+ui.rawStatusFilter.addEventListener("change", () => renderSubmissionRows(uploadItems));
+ui.rawSearchInput.addEventListener("input", () => renderSubmissionRows(uploadItems));
 ui.masterUploadButton.addEventListener("click", uploadMasterDataExcel);
 ui.masterRefreshButton.addEventListener("click", loadMasterDataInfo);
 ui.masterFileInput.addEventListener("change", () => {

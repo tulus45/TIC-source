@@ -279,7 +279,7 @@
           <input id="breakdownSearchInput" type="search" placeholder="Cari sekolah, kecamatan, kelurahan..." autocomplete="off" />
         </label>
         <button id="breakdownExportButton" class="button button--secondary hidden" type="button">Export Breakdown Sekolah</button>
-        <div id="breakdownSummaryText" class="toolbar__summary">Memuat daftar sekolah...</div>
+        <div id="breakdownSummaryText" class="toolbar__summary hidden"></div>
       </section>
 
       <section id="uploadBreakdownPanel" class="table-panel hidden" role="tabpanel">
@@ -298,6 +298,30 @@
         </div>
 
         <div id="uploadBreakdownEmptyState" class="empty-state hidden">Belum ada master data sekolah untuk ditampilkan.</div>
+      </section>
+
+      <section id="uploadRawToolbar" class="toolbar hidden" aria-label="Filter raw upload">
+        <label class="toolbar__field">
+          <span>Kabupaten</span>
+          <select id="rawKabupatenFilter">
+            <option value="">Semua Kabupaten</option>
+          </select>
+        </label>
+        <label class="toolbar__field">
+          <span>Status</span>
+          <select id="rawStatusFilter">
+            <option value="">Semua Status</option>
+            <option value="PENDING">Pending</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+            <option value="SUSPENDED">Suspended</option>
+          </select>
+        </label>
+        <label class="toolbar__field toolbar__field--search">
+          <span>Search</span>
+          <input id="rawSearchInput" type="search" placeholder="Cari submission ID, sekolah, email, UID..." autocomplete="off" />
+        </label>
+        <button id="rawExportButton" class="button button--secondary hidden" type="button">Export Raw Upload</button>
       </section>
 
       <section id="uploadRawPanel" class="table-panel hidden" role="tabpanel">
@@ -349,7 +373,7 @@
       <div class="preview-stage__inner">
         <div class="preview-stage__header">
           <p class="preview-stage__eyebrow">Preview Dokumen</p>
-          <h2>KTP dan Foto Selfie</h2>
+          <h2 id="previewStageTitle">KTP dan Foto Selfie</h2>
           <p id="previewStageMeta" class="preview-stage__meta">Pilih data registrasi untuk melihat preview berkas di area ini.</p>
         </div>
         <div id="previewStageAssets" class="preview-stage__assets"></div>
@@ -358,7 +382,7 @@
     <aside id="detailDrawer" class="detail-drawer hidden" aria-hidden="true" aria-labelledby="drawerTitle">
       <div class="drawer__header">
         <div>
-          <div class="drawer__eyebrow">Review Registrasi</div>
+          <div id="drawerEyebrow" class="drawer__eyebrow">Review Registrasi</div>
           <h2 id="drawerTitle">Pilih data registrasi</h2>
           <p id="drawerMeta" class="drawer__meta">Klik tombol review pada tabel untuk membuka detail lengkap.</p>
         </div>
@@ -377,7 +401,7 @@
         </section>
 
         <section class="drawer-card">
-          <h3>Profil teknisi</h3>
+          <h3 id="drawerFieldsHeading">Profil teknisi</h3>
           <div id="drawerFields" class="drawer-field-grid"></div>
         </section>
 

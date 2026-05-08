@@ -159,6 +159,15 @@ function findRegistrationForSubmission(items, submissionRecord) {
   });
 }
 
+function normalizeSubmissionReviewStatus(value) {
+  const normalized = normalizeString(value).toUpperCase();
+  if (["APPROVED", "REJECTED", "SUSPENDED"].includes(normalized)) {
+    return normalized;
+  }
+
+  return "PENDING";
+}
+
 function normalizeSubmissionIdentity(record, registrations = []) {
   const matchedRegistration = findRegistrationForSubmission(registrations, record);
 
@@ -169,6 +178,9 @@ function normalizeSubmissionIdentity(record, registrations = []) {
       normalizeString(record?.nama)
       || normalizeString(matchedRegistration?.nama)
       || normalizeString(matchedRegistration?.displayName),
+    reviewStatus: normalizeSubmissionReviewStatus(record?.reviewStatus),
+    adminNote: normalizeString(record?.adminNote) || null,
+    rejectionReason: normalizeString(record?.rejectionReason) || null,
   };
 }
 
@@ -721,6 +733,9 @@ async function buildSubmissionRecord(body) {
     gpsAccuracy: typeof body.gpsAccuracy === "number" ? body.gpsAccuracy : null,
     driveFolderId: normalizeString(body.driveFolderId) || null,
     status: "UPLOADED",
+    reviewStatus: "PENDING",
+    adminNote: null,
+    rejectionReason: null,
     createdAt: normalizeString(body.createdAt) || now,
     uploadedAt: now,
     files,
@@ -1154,6 +1169,90 @@ async function handleApi(req, res, url) {
     await writeRegistrations(items);
     sendJson(res, 200, {
       registrationId: target.registrationId,
+      adminNote: target.adminNote,
+      rejectionReason: target.rejectionReason,
+      updatedAt: target.updatedAt,
+    });
+    return;
+  }
+
+  const submissionApprovalMatch = url.pathname.match(/^\/api\/admin\/submissions\/([^/]+)\/(approve|reject|suspend)$/);
+  if (req.method === "POST" && submissionApprovalMatch) {
+    const [, submissionId, action] = submissionApprovalMatch;
+    let body = {};
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      body = {};
+    }
+
+    const items = await readSubmissions();
+    const target = items.find((item) => item.submissionId === submissionId);
+
+    if (!target) {
+      sendJson(res, 404, { error: "Submission tidak ditemukan." });
+      return;
+    }
+
+    const adminNote = normalizeString(body.adminNote) || normalizeString(body.rejectionReason);
+    target.reviewStatus = action === "approve"
+      ? "APPROVED"
+      : action === "reject"
+        ? "REJECTED"
+        : "SUSPENDED";
+    target.adminNote = adminNote || target.adminNote || null;
+    target.rejectionReason = action === "approve"
+      ? null
+      : adminNote || (action === "suspend"
+        ? "Submission sedang ditangguhkan oleh admin."
+        : "Tidak ada catatan tambahan.");
+    target.updatedAt = new Date().toISOString();
+
+    await writeSubmissions(items);
+    sendJson(res, 200, {
+      submissionId: target.submissionId,
+      reviewStatus: target.reviewStatus,
+      adminNote: target.adminNote,
+      rejectionReason: target.rejectionReason,
+      updatedAt: target.updatedAt,
+    });
+    return;
+  }
+
+  const submissionNoteMatch = url.pathname.match(/^\/api\/admin\/submissions\/([^/]+)\/note$/);
+  if (req.method === "POST" && submissionNoteMatch) {
+    const [, submissionId] = submissionNoteMatch;
+    let body = {};
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      body = {};
+    }
+
+    const items = await readSubmissions();
+    const target = items.find((item) => item.submissionId === submissionId);
+
+    if (!target) {
+      sendJson(res, 404, { error: "Submission tidak ditemukan." });
+      return;
+    }
+
+    const adminNote = normalizeString(body.adminNote) || null;
+    target.reviewStatus = normalizeSubmissionReviewStatus(target.reviewStatus);
+    target.adminNote = adminNote;
+    if (target.reviewStatus === "REJECTED" || target.reviewStatus === "SUSPENDED") {
+      target.rejectionReason = adminNote || (
+        target.reviewStatus === "SUSPENDED"
+          ? "Submission sedang ditangguhkan oleh admin."
+          : "Tidak ada catatan tambahan."
+      );
+    }
+    target.updatedAt = new Date().toISOString();
+
+    await writeSubmissions(items);
+    sendJson(res, 200, {
+      submissionId: target.submissionId,
+      reviewStatus: target.reviewStatus,
       adminNote: target.adminNote,
       rejectionReason: target.rejectionReason,
       updatedAt: target.updatedAt,
