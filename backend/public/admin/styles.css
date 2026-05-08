@@ -557,40 +557,36 @@ a {
 }
 
 .summary-need-cell {
-  min-width: 132px;
+  min-width: 118px;
 }
 
 .summary-need-cell__layout {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-}
-
-.summary-need-hint {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 26px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 11px;
+}
+
+.summary-need-hint {
+  position: absolute;
+  top: -7px;
+  right: -6px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  line-height: 1;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .summary-need-hint--neutral {
-  background: rgba(95, 111, 130, 0.14);
   color: var(--muted);
 }
 
 .summary-need-hint--warning {
-  background: rgba(221, 140, 31, 0.16);
   color: #9c5d0d;
 }
 
 .summary-need-hint--success {
-  background: rgba(31, 122, 82, 0.16);
   color: var(--success);
 }
 

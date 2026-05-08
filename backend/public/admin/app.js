@@ -1655,6 +1655,8 @@ function createRegistrationNeedCell(row) {
   const comparison = getRegistrationNeedComparison(row);
   hint.className = `summary-need-hint summary-need-hint--${comparison.tone}`;
   hint.textContent = comparison.label;
+  hint.title = comparison.title;
+  hint.setAttribute("aria-label", comparison.title);
 
   layout.appendChild(input);
   layout.appendChild(hint);
@@ -1754,27 +1756,31 @@ function getRegistrationNeedComparison(row) {
   if (requiredCount === 0) {
     return {
       tone: "neutral",
-      label: "Belum diatur",
+      label: "?",
+      title: "Kebutuhan teknisi belum diatur",
     };
   }
 
   if (approvedCount === requiredCount) {
     return {
       tone: "success",
-      label: "Terpenuhi",
+      label: "0",
+      title: "Kebutuhan teknisi sudah terpenuhi",
     };
   }
 
   if (approvedCount > requiredCount) {
     return {
       tone: "success",
-      label: `Surplus ${approvedCount - requiredCount}`,
+      label: `+${approvedCount - requiredCount}`,
+      title: `Surplus ${approvedCount - requiredCount} teknisi`,
     };
   }
 
   return {
     tone: "warning",
-    label: `Kurang ${requiredCount - approvedCount}`,
+    label: `-${requiredCount - approvedCount}`,
+    title: `Kurang ${requiredCount - approvedCount} teknisi`,
   };
 }
 
