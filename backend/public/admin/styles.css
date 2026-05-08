@@ -543,21 +543,41 @@ a {
 }
 
 .summary-need-input {
-  width: 92px;
-  padding: 10px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.92);
+  width: 54px;
+  padding: 0 0 2px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
   color: var(--ink);
   text-align: center;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  appearance: textfield;
 }
 
 .summary-need-input[data-state="saving"] {
   opacity: 0.7;
 }
 
+.summary-need-input:hover {
+  border-bottom-color: rgba(16, 32, 51, 0.16);
+}
+
+.summary-need-input:focus-visible {
+  outline: none;
+  border-bottom-color: rgba(15, 109, 116, 0.42);
+}
+
+.summary-need-input::-webkit-outer-spin-button,
+.summary-need-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .summary-need-cell {
-  min-width: 118px;
+  min-width: 90px;
 }
 
 .summary-need-cell__layout {
@@ -569,8 +589,8 @@ a {
 
 .summary-need-hint {
   position: absolute;
-  top: -7px;
-  right: -6px;
+  top: -6px;
+  right: -10px;
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
