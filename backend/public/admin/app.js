@@ -28,6 +28,7 @@ const ui = {
   breakdownKabupatenFilter: document.getElementById("breakdownKabupatenFilter"),
   breakdownStatusFilter: document.getElementById("breakdownStatusFilter"),
   breakdownSearchInput: document.getElementById("breakdownSearchInput"),
+  breakdownExportButton: document.getElementById("breakdownExportButton"),
   breakdownSummaryText: document.getElementById("breakdownSummaryText"),
   uploadBreakdownPanel: document.getElementById("uploadBreakdownPanel"),
   uploadBreakdownScroll: document.getElementById("uploadBreakdownScroll"),
@@ -688,13 +689,12 @@ function refreshToolbarSummary() {
 }
 
 function updateExportButtonState(isLoading = false) {
-  const showExportButton = activeTab !== "summary-registrations" && activeTab !== "summary-submissions";
+  const showExportButton = activeTab !== "summary-registrations"
+    && activeTab !== "summary-submissions"
+    && activeTab !== "breakdown-submissions";
+  const showBreakdownExportButton = activeTab === "breakdown-submissions";
   ui.exportButton.classList.toggle("hidden", !showExportButton);
-
-  if (!showExportButton) {
-    ui.exportButton.disabled = true;
-    return;
-  }
+  ui.breakdownExportButton.classList.toggle("hidden", !showBreakdownExportButton);
 
   const hasRows = activeTab === "summary-registrations"
     ? summaryItems.length > 0
@@ -708,7 +708,18 @@ function updateExportButtonState(isLoading = false) {
             ? uploadItems.length > 0
             : false;
 
-  ui.exportButton.disabled = isLoading || !hasRows;
+  if (!showExportButton) {
+    ui.exportButton.disabled = true;
+  } else {
+    ui.exportButton.disabled = isLoading || !hasRows;
+  }
+
+  if (!showBreakdownExportButton) {
+    ui.breakdownExportButton.disabled = true;
+    return;
+  }
+
+  ui.breakdownExportButton.disabled = isLoading || !hasRows;
 }
 
 function formatDate(value) {
@@ -1919,8 +1930,8 @@ function setActiveTab(tab) {
   ui.uploadRawTabButton.setAttribute("aria-selected", showUploadRaw ? "true" : "false");
   ui.masterTabButton.setAttribute("aria-selected", showMasterPanel ? "true" : "false");
 
-  ui.detailToolbar.classList.toggle("hidden", showMasterPanel || showRegistrationSummary || showUploadSummary);
-  ui.summaryText.classList.toggle("hidden", showRegistrationDetail || showUploadSummary);
+  ui.detailToolbar.classList.toggle("hidden", showMasterPanel || showRegistrationSummary || showUploadSummary || showUploadBreakdown);
+  ui.summaryText.classList.toggle("hidden", showRegistrationDetail || showUploadSummary || showUploadBreakdown);
   statusFilterField.classList.toggle("hidden", !showRegistrationDetail);
   areaKerjaFilterField.classList.toggle("hidden", !showRegistrationDetail);
   registrationSearchField.classList.toggle("hidden", !showRegistrationDetail);
@@ -1934,6 +1945,7 @@ function setActiveTab(tab) {
 
   ui.heroViewName.textContent = tabs[tab].label;
   ui.exportButton.textContent = tabs[tab].exportLabel;
+  ui.breakdownExportButton.textContent = tabs["breakdown-submissions"].exportLabel;
 
   refreshToolbarSummary();
   updateExportButtonState();
@@ -2060,6 +2072,7 @@ ui.registrationSearchInput.addEventListener("input", () => {
 });
 ui.logoutButton.addEventListener("click", logoutAdmin);
 ui.exportButton.addEventListener("click", exportToExcel);
+ui.breakdownExportButton.addEventListener("click", exportToExcel);
 ui.summaryTabButton.addEventListener("click", () => setActiveTab("summary-registrations"));
 ui.detailTabButton.addEventListener("click", () => setActiveTab("detail-registrations"));
 ui.uploadSummaryTabButton.addEventListener("click", () => setActiveTab("summary-submissions"));
