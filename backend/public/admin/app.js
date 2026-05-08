@@ -461,9 +461,9 @@ function renderSubmissionSummary(items) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="cell-wrap cell-strong">${escapeHtml(row.kabupaten)}</td>
-      <td class="cell-nowrap">${row.target}</td>
-      <td class="cell-nowrap">${row.achv}</td>
-      <td class="cell-nowrap">${row.toBeAchv}</td>
+      <td class="cell-nowrap cell-center">${row.target}</td>
+      <td class="cell-nowrap cell-center">${row.achv}</td>
+      <td class="cell-nowrap cell-center">${row.toBeAchv}</td>
     `;
     ui.uploadSummaryBody.appendChild(tr);
   });
@@ -472,9 +472,9 @@ function renderSubmissionSummary(items) {
   totalRow.className = "summary-total-row";
   totalRow.innerHTML = `
     <td class="cell-wrap cell-strong">Total</td>
-    <td class="cell-nowrap cell-strong">${totals.target}</td>
-    <td class="cell-nowrap cell-strong">${totals.achv}</td>
-    <td class="cell-nowrap cell-strong">${totals.toBeAchv}</td>
+    <td class="cell-nowrap cell-center cell-strong">${totals.target}</td>
+    <td class="cell-nowrap cell-center cell-strong">${totals.achv}</td>
+    <td class="cell-nowrap cell-center cell-strong">${totals.toBeAchv}</td>
   `;
   ui.uploadSummaryBody.appendChild(totalRow);
 }
@@ -688,7 +688,7 @@ function refreshToolbarSummary() {
 }
 
 function updateExportButtonState(isLoading = false) {
-  const showExportButton = activeTab !== "summary-registrations";
+  const showExportButton = activeTab !== "summary-registrations" && activeTab !== "summary-submissions";
   ui.exportButton.classList.toggle("hidden", !showExportButton);
 
   if (!showExportButton) {
@@ -1889,7 +1889,7 @@ function setActiveTab(tab) {
     },
     "summary-submissions": {
       label: "Summary Upload",
-      exportLabel: "Export Summary Upload",
+      exportLabel: "",
     },
     "breakdown-submissions": {
       label: "Breakdown Sekolah",
@@ -1919,8 +1919,8 @@ function setActiveTab(tab) {
   ui.uploadRawTabButton.setAttribute("aria-selected", showUploadRaw ? "true" : "false");
   ui.masterTabButton.setAttribute("aria-selected", showMasterPanel ? "true" : "false");
 
-  ui.detailToolbar.classList.toggle("hidden", showMasterPanel || showRegistrationSummary);
-  ui.summaryText.classList.toggle("hidden", showRegistrationDetail);
+  ui.detailToolbar.classList.toggle("hidden", showMasterPanel || showRegistrationSummary || showUploadSummary);
+  ui.summaryText.classList.toggle("hidden", showRegistrationDetail || showUploadSummary);
   statusFilterField.classList.toggle("hidden", !showRegistrationDetail);
   areaKerjaFilterField.classList.toggle("hidden", !showRegistrationDetail);
   registrationSearchField.classList.toggle("hidden", !showRegistrationDetail);
