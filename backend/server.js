@@ -24,6 +24,7 @@ const publicDir = path.join(rootDir, "public");
 const uploadsDir = resolveRuntimePath(process.env.TIC_UPLOADS_DIR, path.join(storageRoot, "uploads"));
 const registrationsFile = path.join(dataDir, "registrations.json");
 const submissionsFile = path.join(dataDir, "submissions.json");
+const registrationAreaNeedsFile = path.join(dataDir, "registration_area_needs.json");
 const bundledSchoolMasterFile = path.join(rootDir, "data", "school_master.json");
 const schoolMasterFile = path.join(dataDir, "school_master.json");
 
@@ -53,6 +54,12 @@ async function ensureStorage() {
     await fs.access(submissionsFile);
   } catch {
     await fs.writeFile(submissionsFile, "[]\n", "utf8");
+  }
+
+  try {
+    await fs.access(registrationAreaNeedsFile);
+  } catch {
+    await fs.writeFile(registrationAreaNeedsFile, "{}\n", "utf8");
   }
 
   try {
@@ -105,6 +112,34 @@ async function writeSubmissions(items) {
   await fs.writeFile(
     submissionsFile,
     `${JSON.stringify(items, null, 2)}\n`,
+    "utf8",
+  );
+}
+
+async function readRegistrationAreaNeeds() {
+  await ensureStorage();
+  const raw = await fs.readFile(registrationAreaNeedsFile, "utf8");
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {};
+  }
+
+  return Object.entries(parsed).reduce((accumulator, [areaKerja, value]) => {
+    const normalizedArea = normalizeString(areaKerja);
+    if (!normalizedArea) {
+      return accumulator;
+    }
+
+    accumulator[normalizedArea] = normalizeNonNegativeInteger(value);
+    return accumulator;
+  }, {});
+}
+
+async function writeRegistrationAreaNeeds(payload) {
+  await ensureStorage();
+  await fs.writeFile(
+    registrationAreaNeedsFile,
+    `${JSON.stringify(payload, null, 2)}\n`,
     "utf8",
   );
 }
@@ -291,6 +326,15 @@ async function readJsonBody(req) {
 
 function normalizeString(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeNonNegativeInteger(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.trunc(number));
 }
 
 function normalizeAssetUrl(value) {
@@ -783,7 +827,10 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/admin/registrations") {
-    const items = await readRegistrations();
+    const [items, registrationAreaNeeds] = await Promise.all([
+      readRegistrations(),
+      readRegistrationAreaNeeds(),
+    ]);
     const statusFilter = normalizeString(url.searchParams.get("status")).toUpperCase();
     const filtered = statusFilter
       ? items.filter((item) => item.status === statusFilter)
@@ -792,6 +839,34 @@ async function handleApi(req, res, url) {
     sendJson(res, 200, {
       items: filtered.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
       count: filtered.length,
+      registrationAreaNeeds,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/registration-area-needs") {
+    let body = {};
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      body = {};
+    }
+
+    const areaKerja = normalizeString(body.areaKerja);
+    if (!areaKerja) {
+      sendJson(res, 422, { error: "Area kerja wajib diisi." });
+      return;
+    }
+
+    const requiredCount = normalizeNonNegativeInteger(body.requiredCount);
+    const registrationAreaNeeds = await readRegistrationAreaNeeds();
+    registrationAreaNeeds[areaKerja] = requiredCount;
+    await writeRegistrationAreaNeeds(registrationAreaNeeds);
+
+    sendJson(res, 200, {
+      areaKerja,
+      requiredCount,
+      registrationAreaNeeds,
     });
     return;
   }

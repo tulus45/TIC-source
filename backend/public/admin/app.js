@@ -89,6 +89,7 @@ const registrationSearchField = ui.registrationSearchInput.closest(".toolbar__fi
 let currentItems = [];
 let visibleRegistrationItems = [];
 let summaryItems = [];
+let registrationAreaNeeds = {};
 let uploadItems = [];
 let breakdownRows = [];
 let activeTab = "summary-registrations";
@@ -121,6 +122,9 @@ async function loadRegistrations() {
 
     currentItems = Array.isArray(payload.items) ? payload.items : [];
     summaryItems = Array.isArray(summaryPayload.items) ? summaryPayload.items : [];
+    registrationAreaNeeds = normalizeRegistrationAreaNeedsMap(
+      summaryPayload.registrationAreaNeeds || payload.registrationAreaNeeds,
+    );
 
     populateAreaKerjaFilterOptions(summaryItems);
     renderRows();
@@ -133,6 +137,7 @@ async function loadRegistrations() {
   } catch (error) {
     currentItems = [];
     summaryItems = [];
+    registrationAreaNeeds = {};
     populateAreaKerjaFilterOptions([]);
     renderRows();
     renderSummary([]);
@@ -287,27 +292,25 @@ function renderSummary(items) {
 
   rows.forEach((row) => {
     const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td class="cell-wrap cell-strong">${escapeHtml(row.areaKerja)}</td>
-      <td class="cell-nowrap">${row.approved}</td>
-      <td class="cell-nowrap">${row.pending}</td>
-      <td class="cell-nowrap">${row.rejected}</td>
-      <td class="cell-nowrap">${row.suspended}</td>
-      <td class="cell-nowrap cell-strong">${row.total}</td>
-    `;
+    tr.appendChild(createTextCell(row.areaKerja, "cell-wrap cell-strong"));
+    tr.appendChild(createTextCell(row.approved, "cell-nowrap cell-center"));
+    tr.appendChild(createTextCell(row.pending, "cell-nowrap cell-center"));
+    tr.appendChild(createTextCell(row.rejected, "cell-nowrap cell-center"));
+    tr.appendChild(createTextCell(row.suspended, "cell-nowrap cell-center"));
+    tr.appendChild(createTextCell(row.total, "cell-nowrap cell-center cell-strong"));
+    tr.appendChild(createRegistrationNeedCell(row));
     ui.summaryBody.appendChild(tr);
   });
 
   const totalRow = document.createElement("tr");
   totalRow.className = "summary-total-row";
-  totalRow.innerHTML = `
-    <td class="cell-wrap cell-strong">Total</td>
-    <td class="cell-nowrap cell-strong">${totals.approved}</td>
-    <td class="cell-nowrap cell-strong">${totals.pending}</td>
-    <td class="cell-nowrap cell-strong">${totals.rejected}</td>
-    <td class="cell-nowrap cell-strong">${totals.suspended}</td>
-    <td class="cell-nowrap cell-strong">${totals.total}</td>
-  `;
+  totalRow.appendChild(createTextCell("Total", "cell-wrap cell-strong"));
+  totalRow.appendChild(createTextCell(totals.approved, "cell-nowrap cell-center cell-strong"));
+  totalRow.appendChild(createTextCell(totals.pending, "cell-nowrap cell-center cell-strong"));
+  totalRow.appendChild(createTextCell(totals.rejected, "cell-nowrap cell-center cell-strong"));
+  totalRow.appendChild(createTextCell(totals.suspended, "cell-nowrap cell-center cell-strong"));
+  totalRow.appendChild(createTextCell(totals.total, "cell-nowrap cell-center cell-strong"));
+  totalRow.appendChild(createTextCell(totals.requiredCount, "cell-nowrap cell-center cell-strong"));
   ui.summaryBody.appendChild(totalRow);
 }
 
@@ -1189,6 +1192,7 @@ function exportSummaryToExcel() {
       row.rejected,
       row.suspended,
       row.total,
+      row.requiredCount,
     ];
 
     return `<tr>${values.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`;
@@ -1209,6 +1213,7 @@ function exportSummaryToExcel() {
               <th>Rejected</th>
               <th>Suspended</th>
               <th>Total</th>
+              <th>Kebutuhan Teknisi</th>
             </tr>
           </thead>
           <tbody>
@@ -1220,6 +1225,7 @@ function exportSummaryToExcel() {
               <td><strong>${totals.rejected}</strong></td>
               <td><strong>${totals.suspended}</strong></td>
               <td><strong>${totals.total}</strong></td>
+              <td><strong>${totals.requiredCount}</strong></td>
             </tr>
           </tbody>
         </table>
@@ -1330,6 +1336,7 @@ function buildAreaSummary(items) {
     rejected: 0,
     suspended: 0,
     total: 0,
+    requiredCount: 0,
   };
 
   items.forEach((item) => {
@@ -1344,6 +1351,7 @@ function buildAreaSummary(items) {
         rejected: 0,
         suspended: 0,
         total: 0,
+        requiredCount: getRegistrationAreaNeed(areaKerja),
       });
     }
 
@@ -1367,6 +1375,9 @@ function buildAreaSummary(items) {
   });
 
   const rows = Array.from(areaMap.values()).sort((left, right) => left.areaKerja.localeCompare(right.areaKerja, "id"));
+  rows.forEach((row) => {
+    totals.requiredCount += row.requiredCount;
+  });
   return { rows, totals };
 }
 
@@ -1617,6 +1628,72 @@ function createTextCell(value, className = "") {
   return td;
 }
 
+function createRegistrationNeedCell(row) {
+  const td = document.createElement("td");
+  td.className = "cell-nowrap cell-center";
+
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = "0";
+  input.step = "1";
+  input.inputMode = "numeric";
+  input.className = "summary-need-input";
+  input.value = String(row.requiredCount || 0);
+  input.setAttribute("aria-label", `Kebutuhan teknisi untuk ${row.areaKerja}`);
+
+  input.addEventListener("change", () => {
+    saveRegistrationAreaNeed(row.areaKerja, input);
+  });
+  input.addEventListener("blur", () => {
+    input.value = String(normalizeNonNegativeInteger(input.value));
+  });
+
+  td.appendChild(input);
+  return td;
+}
+
+async function saveRegistrationAreaNeed(areaKerja, input) {
+  const previousValue = getRegistrationAreaNeed(areaKerja);
+  const nextValue = normalizeNonNegativeInteger(input.value);
+  input.value = String(nextValue);
+
+  if (nextValue === previousValue) {
+    return;
+  }
+
+  hideError();
+  input.disabled = true;
+  input.dataset.state = "saving";
+
+  try {
+    const response = await fetch("/api/admin/registration-area-needs", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        areaKerja,
+        requiredCount: nextValue,
+      }),
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || "Gagal menyimpan kebutuhan teknisi.");
+    }
+
+    registrationAreaNeeds = normalizeRegistrationAreaNeedsMap(payload.registrationAreaNeeds);
+    renderSummary(summaryItems);
+    touchLastSync();
+  } catch (error) {
+    input.value = String(previousValue);
+    showError(error.message || "Gagal menyimpan kebutuhan teknisi.");
+  } finally {
+    input.disabled = false;
+    delete input.dataset.state;
+  }
+}
+
 function createStatusCell(status) {
   const td = document.createElement("td");
   const pill = document.createElement("span");
@@ -1629,6 +1706,35 @@ function createStatusCell(status) {
 
 function normalizeSearchValue(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeNonNegativeInteger(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.trunc(parsed));
+}
+
+function normalizeRegistrationAreaNeedsMap(value) {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return Object.entries(value).reduce((accumulator, [areaKerja, requiredCount]) => {
+    const normalizedArea = String(areaKerja || "").trim();
+    if (!normalizedArea) {
+      return accumulator;
+    }
+
+    accumulator[normalizedArea] = normalizeNonNegativeInteger(requiredCount);
+    return accumulator;
+  }, {});
+}
+
+function getRegistrationAreaNeed(areaKerja) {
+  return normalizeNonNegativeInteger(registrationAreaNeeds[areaKerja]);
 }
 
 function getVisibleRegistrationItems() {

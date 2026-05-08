@@ -476,7 +476,7 @@ a {
 }
 
 .registrations-table--summary {
-  min-width: 620px;
+  min-width: 820px;
 }
 
 .registrations-table--wide {
@@ -496,6 +496,11 @@ a {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+.registrations-table thead th.cell-center,
+.cell-center {
+  text-align: center;
 }
 
 .registrations-table tbody td {
@@ -535,6 +540,20 @@ a {
   min-width: 160px;
   font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
   font-size: 13px;
+}
+
+.summary-need-input {
+  width: 92px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  text-align: center;
+}
+
+.summary-need-input[data-state="saving"] {
+  opacity: 0.7;
 }
 
 .cell-strong {
