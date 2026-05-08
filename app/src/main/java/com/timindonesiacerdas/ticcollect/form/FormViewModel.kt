@@ -34,6 +34,7 @@ data class EvidenceStepDefinition(
     val kind: EvidenceStepKind,
     val filenamePrefix: String,
     val lensFacing: Int = CameraSelector.LENS_FACING_BACK,
+    val applyVisualStamp: Boolean = true,
 )
 
 data class EvidencePhotoRecord(
@@ -118,16 +119,18 @@ val defaultEvidenceSteps = listOf(
     EvidenceStepDefinition(
         id = "photo_bapp_1",
         title = "FOTO BAPP 1",
-        instruction = "Ambil halaman pertama BAPP dengan isi dokumen terbaca.",
+        instruction = "Ambil halaman pertama BAPP dengan isi dokumen terbaca. Foto ini disimpan tanpa stamp pada gambar.",
         kind = EvidenceStepKind.PHOTO,
         filenamePrefix = "bapp_1",
+        applyVisualStamp = false,
     ),
     EvidenceStepDefinition(
         id = "photo_bapp_2",
         title = "FOTO BAPP 2",
-        instruction = "Ambil halaman kedua BAPP dan pastikan tanda tangan atau cap terlihat jelas.",
+        instruction = "Ambil halaman kedua BAPP dan pastikan tanda tangan atau cap terlihat jelas. Foto ini disimpan tanpa stamp pada gambar.",
         kind = EvidenceStepKind.PHOTO,
         filenamePrefix = "bapp_2",
+        applyVisualStamp = false,
     ),
     EvidenceStepDefinition(
         id = "record_gps",

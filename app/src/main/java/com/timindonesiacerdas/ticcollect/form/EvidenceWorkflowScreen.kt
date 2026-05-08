@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
-import com.timindonesiacerdas.ticcollect.camera.stampPhotoWithLocation
+import com.timindonesiacerdas.ticcollect.camera.processEvidencePhoto
 import com.timindonesiacerdas.ticcollect.location.LocationStamp
 import com.timindonesiacerdas.ticcollect.location.hasLocationPermission
 import com.timindonesiacerdas.ticcollect.location.resolveCurrentLocationStamp
@@ -123,6 +123,7 @@ private fun EvidencePhotoStepScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
+    val usesVisualStamp = step.applyVisualStamp
     val mainExecutor = remember(context) { ContextCompat.getMainExecutor(context) }
     val previewView = remember(context) {
         PreviewView(context).apply {
@@ -150,7 +151,11 @@ private fun EvidencePhotoStepScreen(
             context.hasLocationPermission()
         hasRequestedPermissions = true
         if (!hasCameraPermission || !hasLocationPermission) {
-            statusMessage = "Izin kamera dan lokasi diperlukan agar foto bisa diberi timestamp dan GPS stamp."
+            statusMessage = if (usesVisualStamp) {
+                "Izin kamera dan lokasi diperlukan agar foto bisa diberi timestamp dan GPS stamp."
+            } else {
+                "Izin kamera dan lokasi diperlukan untuk mengambil foto evidence dan metadata lokasinya."
+            }
         } else {
             statusMessage = null
         }
@@ -297,7 +302,11 @@ private fun EvidencePhotoStepScreen(
 
                         else -> {
                             PermissionState(
-                                message = "Izin kamera dan lokasi dibutuhkan sebelum mengambil foto evidence.",
+                                message = if (usesVisualStamp) {
+                                    "Izin kamera dan lokasi dibutuhkan sebelum mengambil foto evidence."
+                                } else {
+                                    "Izin kamera dan lokasi dibutuhkan sebelum mengambil foto evidence dokumen."
+                                },
                                 onRequestPermission = {
                                     permissionLauncher.launch(
                                         arrayOf(
@@ -324,11 +333,19 @@ private fun EvidencePhotoStepScreen(
                     when {
                         capturedPhoto != null -> {
                             Text(
-                                text = "Foto tersimpan dengan stamp waktu dan GPS.",
+                                text = if (usesVisualStamp) {
+                                    "Foto tersimpan dengan stamp waktu dan GPS."
+                                } else {
+                                    "Foto tersimpan tanpa stamp waktu dan GPS pada gambar."
+                                },
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             Text(
-                                text = "Waktu: ${capturedPhoto.timestamp}\nGPS: ${"%.6f".format(capturedPhoto.latitude)}, ${"%.6f".format(capturedPhoto.longitude)}",
+                                text = if (usesVisualStamp) {
+                                    "Waktu: ${capturedPhoto.timestamp}\nGPS: ${"%.6f".format(capturedPhoto.latitude)}, ${"%.6f".format(capturedPhoto.longitude)}"
+                                } else {
+                                    "Metadata capture:\nWaktu: ${capturedPhoto.timestamp}\nGPS: ${"%.6f".format(capturedPhoto.latitude)}, ${"%.6f".format(capturedPhoto.longitude)}"
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
                             )
@@ -336,11 +353,19 @@ private fun EvidencePhotoStepScreen(
 
                         locationStamp != null -> {
                             Text(
-                                text = "GPS siap untuk stamp foto.",
+                                text = if (usesVisualStamp) {
+                                    "GPS siap untuk stamp foto."
+                                } else {
+                                    "Foto ini akan disimpan tanpa stamp pada gambar."
+                                },
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             Text(
-                                text = "${"%.6f".format(locationStamp!!.latitude)}, ${"%.6f".format(locationStamp!!.longitude)}",
+                                text = if (usesVisualStamp) {
+                                    "${"%.6f".format(locationStamp!!.latitude)}, ${"%.6f".format(locationStamp!!.longitude)}"
+                                } else {
+                                    "Metadata lokasi siap: ${"%.6f".format(locationStamp!!.latitude)}, ${"%.6f".format(locationStamp!!.longitude)}"
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
                             )
@@ -395,7 +420,11 @@ private fun EvidencePhotoStepScreen(
                                         return@TicPrimaryButton
                                     }
                                     if (stamp == null) {
-                                        statusMessage = "GPS belum siap. Refresh lokasi dulu."
+                                        statusMessage = if (usesVisualStamp) {
+                                            "GPS belum siap. Refresh lokasi dulu."
+                                        } else {
+                                            "Metadata lokasi belum siap. Refresh lokasi dulu."
+                                        }
                                         return@TicPrimaryButton
                                     }
 
@@ -406,7 +435,11 @@ private fun EvidencePhotoStepScreen(
                                     val captureTimestamp = TimeFormatter.nowDisplay()
                                     capture.targetRotation = previewView.display?.rotation ?: AndroidSurface.ROTATION_0
                                     isCapturing = true
-                                    statusMessage = "Menyimpan foto dan menambahkan stamp..."
+                                    statusMessage = if (usesVisualStamp) {
+                                        "Menyimpan foto dan menambahkan stamp..."
+                                    } else {
+                                        "Menyimpan foto tanpa stamp..."
+                                    }
 
                                     capture.takePicture(
                                         ImageCapture.OutputFileOptions.Builder(outputFile).build(),
@@ -416,9 +449,13 @@ private fun EvidencePhotoStepScreen(
                                                 scope.launch {
                                                     runCatching {
                                                         withContext(Dispatchers.IO) {
-                                                            stampPhotoWithLocation(
+                                                            processEvidencePhoto(
                                                                 filePath = outputFile.absolutePath,
-                                                                locationStamp = stamp.copy(timestampDisplay = captureTimestamp),
+                                                                locationStamp = if (usesVisualStamp) {
+                                                                    stamp.copy(timestampDisplay = captureTimestamp)
+                                                                } else {
+                                                                    null
+                                                                },
                                                             )
                                                         }
                                                     }.onSuccess {
