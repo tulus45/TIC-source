@@ -74,7 +74,6 @@ const ui = {
   drawerPrimaryLabel: document.getElementById("drawerPrimaryLabel"),
   drawerUpdatedAt: document.getElementById("drawerUpdatedAt"),
   drawerFields: document.getElementById("drawerFields"),
-  drawerAssets: document.getElementById("drawerAssets"),
   drawerNoteInput: document.getElementById("drawerNoteInput"),
   drawerNoteSaveButton: document.getElementById("drawerNoteSaveButton"),
   drawerNoteStatus: document.getElementById("drawerNoteStatus"),
@@ -781,7 +780,6 @@ function fillRegistrationDrawer(item, successMessage = "") {
   ui.drawerUpdatedAt.textContent = `Diperbarui ${formatDate(item.updatedAt)}`;
   ui.drawerNoteInput.value = item.adminNote || item.rejectionReason || "";
   renderDrawerFields(item);
-  renderDrawerAssets(item);
   renderPreviewStage(item);
   setDrawerActionAvailability(item);
   setDrawerNoteState(successMessage, successMessage ? "saved" : "");
