@@ -192,6 +192,7 @@ async function loadMasterDataInfo() {
 
     currentMasterData = payload;
     renderMasterDataInfo(payload);
+    renderSummary(summaryItems);
     renderSubmissionSummary(uploadItems);
     renderSubmissionRows(uploadItems);
     refreshSubmissionBreakdown();
@@ -201,6 +202,7 @@ async function loadMasterDataInfo() {
   } catch (error) {
     currentMasterData = null;
     renderMasterDataInfo(null, error.message || "Belum bisa memuat info master data.");
+    renderSummary(summaryItems);
     renderSubmissionSummary(uploadItems);
     renderSubmissionRows(uploadItems);
     refreshSubmissionBreakdown();
@@ -279,14 +281,14 @@ function renderRows() {
 
 function renderSummary(items) {
   ui.summaryBody.innerHTML = "";
+  const { rows, totals } = buildAreaSummary(items);
 
-  if (!items.length) {
+  if (!rows.length) {
     ui.summaryScroll.classList.add("hidden");
     ui.summaryEmptyState.classList.remove("hidden");
     return;
   }
 
-  const { rows, totals } = buildAreaSummary(items);
   ui.summaryScroll.classList.remove("hidden");
   ui.summaryEmptyState.classList.add("hidden");
 
@@ -1339,6 +1341,18 @@ function buildAreaSummary(items) {
     requiredCount: 0,
   };
 
+  getRegistrationSummarySeedAreas().forEach((areaKerja) => {
+    areaMap.set(areaKerja, {
+      areaKerja,
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      suspended: 0,
+      total: 0,
+      requiredCount: getRegistrationAreaNeed(areaKerja),
+    });
+  });
+
   items.forEach((item) => {
     const areaKerja = item.areaKerja || "Belum diisi";
     const status = String(item.status || "").toUpperCase();
@@ -1379,6 +1393,32 @@ function buildAreaSummary(items) {
     totals.requiredCount += row.requiredCount;
   });
   return { rows, totals };
+}
+
+function getRegistrationSummarySeedAreas() {
+  const seededAreas = new Set();
+  const { kabupatenColumn } = getMasterColumnHints();
+  const masterColumns = Array.isArray(currentMasterData?.columns) ? currentMasterData.columns : [];
+  const masterRows = Array.isArray(currentMasterData?.rows) ? currentMasterData.rows : [];
+  const kabupatenIndex = masterColumns.indexOf(kabupatenColumn);
+
+  if (kabupatenIndex >= 0) {
+    masterRows.forEach((row) => {
+      const areaKerja = String(row?.[kabupatenIndex] || "").trim();
+      if (areaKerja) {
+        seededAreas.add(areaKerja);
+      }
+    });
+  }
+
+  Object.keys(registrationAreaNeeds).forEach((areaKerja) => {
+    const normalizedArea = String(areaKerja || "").trim();
+    if (normalizedArea) {
+      seededAreas.add(normalizedArea);
+    }
+  });
+
+  return Array.from(seededAreas).sort((left, right) => left.localeCompare(right, "id"));
 }
 
 function buildSubmissionSummary(items) {
