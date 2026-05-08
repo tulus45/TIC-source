@@ -293,24 +293,24 @@ function renderSummary(items) {
   rows.forEach((row) => {
     const tr = document.createElement("tr");
     tr.appendChild(createTextCell(row.areaKerja, "cell-wrap cell-strong"));
+    tr.appendChild(createRegistrationNeedCell(row));
     tr.appendChild(createTextCell(row.approved, "cell-nowrap cell-center"));
     tr.appendChild(createTextCell(row.pending, "cell-nowrap cell-center"));
     tr.appendChild(createTextCell(row.rejected, "cell-nowrap cell-center"));
     tr.appendChild(createTextCell(row.suspended, "cell-nowrap cell-center"));
     tr.appendChild(createTextCell(row.total, "cell-nowrap cell-center cell-strong"));
-    tr.appendChild(createRegistrationNeedCell(row));
     ui.summaryBody.appendChild(tr);
   });
 
   const totalRow = document.createElement("tr");
   totalRow.className = "summary-total-row";
   totalRow.appendChild(createTextCell("Total", "cell-wrap cell-strong"));
+  totalRow.appendChild(createTextCell(totals.requiredCount, "cell-nowrap cell-center cell-strong"));
   totalRow.appendChild(createTextCell(totals.approved, "cell-nowrap cell-center cell-strong"));
   totalRow.appendChild(createTextCell(totals.pending, "cell-nowrap cell-center cell-strong"));
   totalRow.appendChild(createTextCell(totals.rejected, "cell-nowrap cell-center cell-strong"));
   totalRow.appendChild(createTextCell(totals.suspended, "cell-nowrap cell-center cell-strong"));
   totalRow.appendChild(createTextCell(totals.total, "cell-nowrap cell-center cell-strong"));
-  totalRow.appendChild(createTextCell(totals.requiredCount, "cell-nowrap cell-center cell-strong"));
   ui.summaryBody.appendChild(totalRow);
 }
 
@@ -1187,12 +1187,12 @@ function exportSummaryToExcel() {
   const rowsHtml = rows.map((row) => {
     const values = [
       row.areaKerja,
+      row.requiredCount,
       row.approved,
       row.pending,
       row.rejected,
       row.suspended,
       row.total,
-      row.requiredCount,
     ];
 
     return `<tr>${values.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`;
@@ -1208,24 +1208,24 @@ function exportSummaryToExcel() {
           <thead>
             <tr>
               <th>Area Kerja</th>
+              <th>Kebutuhan Teknisi</th>
               <th>Approved</th>
               <th>Pending</th>
               <th>Rejected</th>
               <th>Suspended</th>
               <th>Total</th>
-              <th>Kebutuhan Teknisi</th>
             </tr>
           </thead>
           <tbody>
             ${rowsHtml}
             <tr>
               <td><strong>Total</strong></td>
+              <td><strong>${totals.requiredCount}</strong></td>
               <td><strong>${totals.approved}</strong></td>
               <td><strong>${totals.pending}</strong></td>
               <td><strong>${totals.rejected}</strong></td>
               <td><strong>${totals.suspended}</strong></td>
               <td><strong>${totals.total}</strong></td>
-              <td><strong>${totals.requiredCount}</strong></td>
             </tr>
           </tbody>
         </table>
@@ -1630,7 +1630,10 @@ function createTextCell(value, className = "") {
 
 function createRegistrationNeedCell(row) {
   const td = document.createElement("td");
-  td.className = "cell-nowrap cell-center";
+  td.className = "cell-center summary-need-cell";
+
+  const layout = document.createElement("div");
+  layout.className = "summary-need-cell__layout";
 
   const input = document.createElement("input");
   input.type = "number";
@@ -1648,7 +1651,14 @@ function createRegistrationNeedCell(row) {
     input.value = String(normalizeNonNegativeInteger(input.value));
   });
 
-  td.appendChild(input);
+  const hint = document.createElement("span");
+  const comparison = getRegistrationNeedComparison(row);
+  hint.className = `summary-need-hint summary-need-hint--${comparison.tone}`;
+  hint.textContent = comparison.label;
+
+  layout.appendChild(input);
+  layout.appendChild(hint);
+  td.appendChild(layout);
   return td;
 }
 
@@ -1735,6 +1745,37 @@ function normalizeRegistrationAreaNeedsMap(value) {
 
 function getRegistrationAreaNeed(areaKerja) {
   return normalizeNonNegativeInteger(registrationAreaNeeds[areaKerja]);
+}
+
+function getRegistrationNeedComparison(row) {
+  const requiredCount = normalizeNonNegativeInteger(row?.requiredCount);
+  const approvedCount = normalizeNonNegativeInteger(row?.approved);
+
+  if (requiredCount === 0) {
+    return {
+      tone: "neutral",
+      label: "Belum diatur",
+    };
+  }
+
+  if (approvedCount === requiredCount) {
+    return {
+      tone: "success",
+      label: "Terpenuhi",
+    };
+  }
+
+  if (approvedCount > requiredCount) {
+    return {
+      tone: "success",
+      label: `Surplus ${approvedCount - requiredCount}`,
+    };
+  }
+
+  return {
+    tone: "warning",
+    label: `Kurang ${requiredCount - approvedCount}`,
+  };
 }
 
 function getVisibleRegistrationItems() {
