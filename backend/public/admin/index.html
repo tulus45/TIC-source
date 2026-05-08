@@ -174,7 +174,6 @@
             <p class="panel-heading__eyebrow">Review Registrasi</p>
             <h2>Daftar teknisi yang siap ditinjau</h2>
           </div>
-          <p>Klik tombol review untuk melihat identitas lengkap, preview berkas, catatan admin, dan aksi approve atau reject.</p>
         </div>
 
         <div id="tableScroll" class="table-scroll">
@@ -182,9 +181,9 @@
             <thead>
               <tr>
                 <th>Status</th>
-                <th>Teknisi</th>
                 <th>Area Kerja</th>
-                <th>Aset</th>
+                <th>Teknisi</th>
+                <th>No HP</th>
                 <th>Catatan</th>
                 <th>Aktivitas</th>
                 <th>Review</th>
@@ -313,19 +312,14 @@
       <template id="rowTemplate">
         <tr class="registration-row">
           <td><span class="status-pill"></span></td>
+          <td class="cell-wrap row-area"></td>
           <td>
             <div class="person-cell">
               <strong class="row-name"></strong>
               <span class="row-meta"></span>
             </div>
           </td>
-          <td class="cell-wrap row-area"></td>
-          <td>
-            <div class="asset-summary">
-              <strong class="row-assets"></strong>
-              <span class="row-assets-detail"></span>
-            </div>
-          </td>
+          <td class="cell-nowrap row-phone"></td>
           <td class="cell-wrap row-note-preview"></td>
           <td>
             <div class="activity-cell">

@@ -246,22 +246,18 @@ function renderRows() {
     const name = fragment.querySelector(".row-name");
     const meta = fragment.querySelector(".row-meta");
     const area = fragment.querySelector(".row-area");
-    const assets = fragment.querySelector(".row-assets");
-    const assetsDetail = fragment.querySelector(".row-assets-detail");
+    const phone = fragment.querySelector(".row-phone");
     const notePreview = fragment.querySelector(".row-note-preview");
     const created = fragment.querySelector(".row-created");
     const updated = fragment.querySelector(".row-updated");
     const viewButton = fragment.querySelector(".row-view-button");
 
-    const assetSummary = summarizeRegistrationAssets(item);
-
     statusPill.textContent = item.status || "-";
     statusPill.dataset.status = item.status || "";
     name.textContent = item.nama || item.displayName || "Tanpa nama";
-    meta.textContent = [item.gmail || "-", item.uid || "-"].join(" • ");
+    meta.textContent = item.gmail || "-";
     area.textContent = item.areaKerja || item.kabupaten || "Belum diisi";
-    assets.textContent = assetSummary.title;
-    assetsDetail.textContent = assetSummary.detail;
+    phone.textContent = item.noHp || "-";
     notePreview.textContent = truncateText(item.adminNote || item.rejectionReason || "Belum ada catatan admin.", 120);
     created.textContent = `Dibuat ${formatDate(item.createdAt)}`;
     updated.textContent = `Update ${formatDate(item.updatedAt)}`;
@@ -1681,6 +1677,7 @@ function setActiveTab(tab) {
   ui.masterTabButton.setAttribute("aria-selected", showMasterPanel ? "true" : "false");
 
   ui.detailToolbar.classList.toggle("hidden", showMasterPanel || showRegistrationSummary);
+  ui.summaryText.classList.toggle("hidden", showRegistrationDetail);
   statusFilterField.classList.toggle("hidden", !showRegistrationDetail);
   registrationSearchField.classList.toggle("hidden", !showRegistrationDetail);
   ui.summaryPanel.classList.toggle("hidden", !showRegistrationSummary);
