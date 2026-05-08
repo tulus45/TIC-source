@@ -1680,7 +1680,7 @@ function setActiveTab(tab) {
   ui.uploadRawTabButton.setAttribute("aria-selected", showUploadRaw ? "true" : "false");
   ui.masterTabButton.setAttribute("aria-selected", showMasterPanel ? "true" : "false");
 
-  ui.detailToolbar.classList.toggle("hidden", showMasterPanel);
+  ui.detailToolbar.classList.toggle("hidden", showMasterPanel || showRegistrationSummary);
   statusFilterField.classList.toggle("hidden", !showRegistrationDetail);
   registrationSearchField.classList.toggle("hidden", !showRegistrationDetail);
   ui.summaryPanel.classList.toggle("hidden", !showRegistrationSummary);
