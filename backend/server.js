@@ -1201,6 +1201,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && /\.[a-z0-9]+$/i.test(url.pathname) && !url.pathname.startsWith("/admin/")) {
+      await sendStatic(res, url.pathname.slice(1));
+      return;
+    }
+
     if (req.method === "GET" && url.pathname.startsWith("/admin/")) {
       await sendStatic(res, url.pathname.slice(1));
       return;
