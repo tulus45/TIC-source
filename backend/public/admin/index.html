@@ -9,41 +9,139 @@
   <body>
     <div class="page-shell">
       <header class="hero">
-        <div class="hero__badge">TIC Admin</div>
-        <h1>Review Registrasi dan Upload Data</h1>
-        <p>Dashboard admin untuk memantau registrasi teknisi, hasil upload data collection, dan pembaruan master lokasi sekolah.</p>
+        <div class="hero__content">
+          <div class="hero__badge">TIC Admin Console</div>
+          <h1>Backend admin yang lebih ringkas, cepat dipindai, dan aman untuk operasional harian.</h1>
+          <p>
+            Dashboard ini tetap memakai API backend yang sama seperti sebelumnya. Perubahan difokuskan pada
+            pengalaman review registrasi, monitoring upload lapangan, dan pembaruan master data sekolah.
+          </p>
+          <div class="hero__meta">
+            <span id="heroViewName" class="hero__meta-pill">Summary Registrasi</span>
+            <span id="heroLastSync" class="hero__meta-copy">Menunggu sinkronisasi data...</span>
+          </div>
+        </div>
+
+        <div class="hero__stats">
+          <div class="hero-stat">
+            <span>Registrasi</span>
+            <strong id="heroRegistrationsCount">0</strong>
+            <small>Total teknisi tercatat</small>
+          </div>
+          <div class="hero-stat">
+            <span>Upload</span>
+            <strong id="heroUploadsCount">0</strong>
+            <small>Raw upload diterima backend</small>
+          </div>
+          <div class="hero-stat">
+            <span>Master Sekolah</span>
+            <strong id="heroMasterRowsCount">0</strong>
+            <small>Baris referensi aktif</small>
+          </div>
+        </div>
       </header>
+
+      <section class="insight-grid" aria-label="Ringkasan operasional">
+        <article class="insight-card">
+          <div class="insight-card__header">
+            <div>
+              <p class="insight-card__eyebrow">Registrasi Teknisi</p>
+              <h2>Status review terbaru</h2>
+            </div>
+            <span class="insight-card__badge">Live</span>
+          </div>
+          <div class="metric-grid">
+            <div class="metric-tile">
+              <span>Total</span>
+              <strong id="metricRegistrationsTotal">0</strong>
+            </div>
+            <div class="metric-tile metric-tile--warning">
+              <span>Pending</span>
+              <strong id="metricRegistrationsPending">0</strong>
+            </div>
+            <div class="metric-tile metric-tile--success">
+              <span>Approved</span>
+              <strong id="metricRegistrationsApproved">0</strong>
+            </div>
+            <div class="metric-tile metric-tile--danger">
+              <span>Perlu Tindak Lanjut</span>
+              <strong id="metricRegistrationsAttention">0</strong>
+            </div>
+          </div>
+          <p id="metricRegistrationAreas" class="insight-card__footer">Belum ada area kerja yang masuk.</p>
+        </article>
+
+        <article class="insight-card">
+          <div class="insight-card__header">
+            <div>
+              <p class="insight-card__eyebrow">Upload Lapangan</p>
+              <h2>Achievement terhadap target</h2>
+            </div>
+            <span class="insight-card__badge">Sync</span>
+          </div>
+          <div class="metric-grid">
+            <div class="metric-tile">
+              <span>Raw Upload</span>
+              <strong id="metricUploadsTotal">0</strong>
+            </div>
+            <div class="metric-tile metric-tile--success">
+              <span>Sekolah Tercapai</span>
+              <strong id="metricUploadsSchools">0</strong>
+            </div>
+            <div class="metric-tile metric-tile--warning">
+              <span>Sisa Target</span>
+              <strong id="metricUploadsPendingTarget">0</strong>
+            </div>
+            <div class="metric-tile">
+              <span>Kabupaten</span>
+              <strong id="metricUploadsKabupaten">0</strong>
+            </div>
+          </div>
+          <p id="metricUploadsCoverage" class="insight-card__footer">Target akan dihitung setelah master data dimuat.</p>
+        </article>
+
+        <article class="insight-card">
+          <div class="insight-card__header">
+            <div>
+              <p class="insight-card__eyebrow">Master Data Sekolah</p>
+              <h2>Struktur referensi aktif</h2>
+            </div>
+            <span class="insight-card__badge">Excel</span>
+          </div>
+          <div class="metric-grid">
+            <div class="metric-tile">
+              <span>Baris</span>
+              <strong id="metricMasterRows">0</strong>
+            </div>
+            <div class="metric-tile">
+              <span>Kolom</span>
+              <strong id="metricMasterColumns">0</strong>
+            </div>
+            <div class="metric-tile">
+              <span>Update Terakhir</span>
+              <strong id="metricMasterUpdated">-</strong>
+            </div>
+            <div class="metric-tile">
+              <span>View Aktif</span>
+              <strong id="metricActiveView">Summary Registrasi</strong>
+            </div>
+          </div>
+          <p id="metricMasterDataset" class="insight-card__footer">Belum ada dataset master yang aktif.</p>
+        </article>
+      </section>
 
       <section id="errorBanner" class="banner banner--error hidden"></section>
 
-      <section class="tabs" aria-label="Navigasi admin">
-        <button id="summaryTabButton" class="tab-button" type="button" aria-selected="true">Summary Registrasi</button>
-        <button id="detailTabButton" class="tab-button" type="button" aria-selected="false">Data Registrasi</button>
-        <button id="uploadSummaryTabButton" class="tab-button" type="button" aria-selected="false">Summary Upload Data</button>
-        <button id="uploadBreakdownTabButton" class="tab-button" type="button" aria-selected="false">Breakdown List Sekolah</button>
-        <button id="uploadRawTabButton" class="tab-button" type="button" aria-selected="false">Raw Data Upload</button>
-        <button id="masterTabButton" class="tab-button" type="button" aria-selected="false">Master Data Sekolah</button>
+      <section class="tabs" aria-label="Navigasi admin" role="tablist">
+        <button id="summaryTabButton" class="tab-button" type="button" role="tab" aria-selected="true">Summary Registrasi</button>
+        <button id="detailTabButton" class="tab-button" type="button" role="tab" aria-selected="false">Review Registrasi</button>
+        <button id="uploadSummaryTabButton" class="tab-button" type="button" role="tab" aria-selected="false">Summary Upload</button>
+        <button id="uploadBreakdownTabButton" class="tab-button" type="button" role="tab" aria-selected="false">Breakdown Sekolah</button>
+        <button id="uploadRawTabButton" class="tab-button" type="button" role="tab" aria-selected="false">Raw Upload</button>
+        <button id="masterTabButton" class="tab-button" type="button" role="tab" aria-selected="false">Master Data</button>
       </section>
 
-      <section id="masterPanel" class="master-panel hidden" aria-label="Pembaruan master data sekolah">
-        <div class="master-panel__intro">
-          <div class="hero__badge hero__badge--light">Master Data Sekolah</div>
-          <h2>Upload Excel untuk update cascading lokasi</h2>
-          <p>Admin cukup upload file Excel terbaru. Header kolom akan dipakai sebagai urutan cascading di aplikasi Android, jadi jumlah level bisa berubah tanpa ubah APK.</p>
-        </div>
-        <div class="master-panel__controls">
-          <label class="master-upload">
-            <span>Pilih file Excel</span>
-            <input id="masterFileInput" type="file" accept=".xlsx,.xls" />
-          </label>
-          <button id="masterUploadButton" class="button button--primary" type="button">Upload Excel</button>
-          <button id="masterRefreshButton" class="button button--secondary" type="button">Muat Info Master</button>
-        </div>
-        <div id="masterUploadStatus" class="master-panel__status">Belum ada file dipilih.</div>
-        <div id="masterDataInfo" class="master-panel__info">Memuat info master data...</div>
-      </section>
-
-      <section id="detailToolbar" class="toolbar hidden">
+      <section id="detailToolbar" class="toolbar" aria-label="Toolbar data">
         <label class="toolbar__field">
           <span>Status</span>
           <select id="statusFilter">
@@ -54,33 +152,74 @@
             <option value="SUSPENDED">Suspended</option>
           </select>
         </label>
-        <button id="exportButton" class="button button--secondary">Export Excel</button>
+
+        <label class="toolbar__field toolbar__field--search">
+          <span>Pencarian</span>
+          <input id="registrationSearchInput" type="search" placeholder="Cari nama, gmail, UID, area kerja..." autocomplete="off" />
+        </label>
+
+        <button id="exportButton" class="button button--secondary" type="button">Export Excel</button>
         <div id="summaryText" class="toolbar__summary">Memuat data...</div>
       </section>
 
-      <section id="detailPanel" class="table-panel hidden">
+      <section id="masterPanel" class="master-panel hidden" aria-label="Pembaruan master data sekolah" role="tabpanel">
+        <div class="master-panel__intro">
+          <div class="hero__badge hero__badge--light">Master Data Sekolah</div>
+          <h2>Update cascading lokasi langsung dari Excel</h2>
+          <p>
+            Struktur kolom akan dibaca apa adanya, sehingga urutan wilayah di Android tetap mengikuti file terbaru
+            tanpa perlu ubah APK.
+          </p>
+        </div>
+
+        <div class="master-meta-grid">
+          <div class="mini-stat">
+            <span>Total Kolom</span>
+            <strong id="masterColumnsValue">0</strong>
+          </div>
+          <div class="mini-stat">
+            <span>Total Baris</span>
+            <strong id="masterRowsValue">0</strong>
+          </div>
+          <div class="mini-stat">
+            <span>Update Terakhir</span>
+            <strong id="masterUpdatedValue">-</strong>
+          </div>
+        </div>
+
+        <div class="master-panel__controls">
+          <label class="master-upload">
+            <span>Pilih file Excel</span>
+            <input id="masterFileInput" type="file" accept=".xlsx,.xls" />
+          </label>
+          <button id="masterUploadButton" class="button button--primary" type="button">Upload Excel</button>
+          <button id="masterRefreshButton" class="button button--secondary" type="button">Muat Ulang Info</button>
+        </div>
+
+        <div id="masterUploadStatus" class="master-panel__status">Belum ada file dipilih.</div>
+        <div id="masterDataInfo" class="master-panel__info">Memuat info master data...</div>
+      </section>
+
+      <section id="detailPanel" class="table-panel hidden" role="tabpanel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-heading__eyebrow">Review Registrasi</p>
+            <h2>Daftar teknisi yang siap ditinjau</h2>
+          </div>
+          <p>Klik tombol review untuk melihat identitas lengkap, preview berkas, catatan admin, dan aksi approve atau reject.</p>
+        </div>
+
         <div id="tableScroll" class="table-scroll">
           <table class="registrations-table">
             <thead>
               <tr>
                 <th>Status</th>
-                <th>ID Reg</th>
-                <th>UID</th>
-                <th>Gmail</th>
-                <th>Nama</th>
-                <th>NIK</th>
-                <th>Alamat</th>
-                <th>No HP</th>
-                <th>No Rekening</th>
-                <th>Nama Bank</th>
-                <th>Nama Pemilik</th>
+                <th>Teknisi</th>
                 <th>Area Kerja</th>
-                <th>KTP</th>
-                <th>Selfie</th>
-                <th>Dibuat</th>
-                <th>Update</th>
+                <th>Aset</th>
                 <th>Catatan</th>
-                <th>Aksi</th>
+                <th>Aktivitas</th>
+                <th>Review</th>
               </tr>
             </thead>
             <tbody id="tableBody"></tbody>
@@ -90,8 +229,15 @@
         <div id="emptyState" class="empty-state hidden">Belum ada data registrasi yang masuk.</div>
       </section>
 
-      <section id="summaryPanel" class="table-panel">
-        <div class="summary-note">Ringkasan ini menghitung seluruh data registrasi per area kerja.</div>
+      <section id="summaryPanel" class="table-panel" role="tabpanel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-heading__eyebrow">Summary Registrasi</p>
+            <h2>Distribusi status per area kerja</h2>
+          </div>
+          <p>Gunakan ringkasan ini untuk melihat area mana yang masih menumpuk di pending atau membutuhkan tindak lanjut.</p>
+        </div>
+
         <div id="summaryScroll" class="table-scroll">
           <table class="registrations-table registrations-table--summary">
             <thead>
@@ -111,8 +257,15 @@
         <div id="summaryEmptyState" class="empty-state hidden">Belum ada data registrasi untuk diringkas.</div>
       </section>
 
-      <section id="uploadSummaryPanel" class="table-panel hidden">
-        <div class="summary-note">Ringkasan ini menghitung target sekolah per kabupaten dari master data dan achievement upload yang sudah masuk.</div>
+      <section id="uploadSummaryPanel" class="table-panel hidden" role="tabpanel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-heading__eyebrow">Summary Upload Data</p>
+            <h2>Progress target sekolah per kabupaten</h2>
+          </div>
+          <p>Nilai target diambil dari master data sekolah, sedangkan achievement diambil dari submission yang sudah berstatus uploaded.</p>
+        </div>
+
         <div id="uploadSummaryScroll" class="table-scroll">
           <table class="registrations-table registrations-table--summary">
             <thead>
@@ -127,10 +280,10 @@
           </table>
         </div>
 
-        <div id="uploadSummaryEmptyState" class="empty-state hidden">Belum ada data upload yang masuk.</div>
+        <div id="uploadSummaryEmptyState" class="empty-state hidden">Belum ada data upload atau master data yang bisa diringkas.</div>
       </section>
 
-      <section id="uploadBreakdownToolbar" class="toolbar hidden">
+      <section id="uploadBreakdownToolbar" class="toolbar hidden" aria-label="Filter breakdown sekolah">
         <label class="toolbar__field">
           <span>Kabupaten</span>
           <select id="breakdownKabupatenFilter">
@@ -147,14 +300,22 @@
         </label>
         <label class="toolbar__field toolbar__field--search">
           <span>Search</span>
-          <input id="breakdownSearchInput" type="search" placeholder="Cari sekolah, kecamatan, kelurahan..." />
+          <input id="breakdownSearchInput" type="search" placeholder="Cari sekolah, kecamatan, kelurahan..." autocomplete="off" />
         </label>
         <div id="breakdownSummaryText" class="toolbar__summary">Memuat daftar sekolah...</div>
       </section>
 
-      <section id="uploadBreakdownPanel" class="table-panel hidden">
+      <section id="uploadBreakdownPanel" class="table-panel hidden" role="tabpanel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-heading__eyebrow">Breakdown List Sekolah</p>
+            <h2>Status sekolah per baris master data</h2>
+          </div>
+          <p>View ini membantu mengecek sekolah mana yang sudah completed dan mana yang masih menunggu upload lapangan.</p>
+        </div>
+
         <div id="uploadBreakdownScroll" class="table-scroll">
-          <table id="uploadBreakdownTable" class="registrations-table">
+          <table id="uploadBreakdownTable" class="registrations-table registrations-table--wide">
             <thead id="uploadBreakdownHead"></thead>
             <tbody id="uploadBreakdownBody"></tbody>
           </table>
@@ -163,9 +324,17 @@
         <div id="uploadBreakdownEmptyState" class="empty-state hidden">Belum ada master data sekolah untuk ditampilkan.</div>
       </section>
 
-      <section id="uploadRawPanel" class="table-panel hidden">
+      <section id="uploadRawPanel" class="table-panel hidden" role="tabpanel">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-heading__eyebrow">Raw Data Upload</p>
+            <h2>Payload upload yang diterima backend</h2>
+          </div>
+          <p>Semua detail lokasi, file evidence, dan GPS tetap ditampilkan utuh untuk keperluan audit data lapangan.</p>
+        </div>
+
         <div id="uploadTableScroll" class="table-scroll">
-          <table id="uploadRawTable" class="registrations-table">
+          <table id="uploadRawTable" class="registrations-table registrations-table--wide">
             <thead id="uploadTableHead"></thead>
             <tbody id="uploadTableBody"></tbody>
           </table>
@@ -175,67 +344,89 @@
       </section>
 
       <template id="rowTemplate">
-        <tr>
+        <tr class="registration-row">
           <td><span class="status-pill"></span></td>
-          <td class="cell-code row-registration-id"></td>
-          <td class="cell-code row-uid"></td>
-          <td class="cell-wrap row-gmail"></td>
-          <td class="cell-wrap row-name"></td>
-          <td class="cell-code row-nik"></td>
-          <td class="cell-wrap row-alamat"></td>
-          <td class="cell-nowrap row-nohp"></td>
-          <td class="cell-code row-rekening"></td>
-          <td class="cell-wrap row-bank"></td>
-          <td class="cell-wrap row-pemilik"></td>
+          <td>
+            <div class="person-cell">
+              <strong class="row-name"></strong>
+              <span class="row-meta"></span>
+            </div>
+          </td>
           <td class="cell-wrap row-area"></td>
           <td>
-            <a class="asset-link row-ktp-link" href="#" target="_blank" rel="noreferrer noopener">
-              <img class="asset-thumb row-ktp-thumb hidden" alt="Preview KTP" />
-              <span class="asset-text row-ktp-text"></span>
-            </a>
+            <div class="asset-summary">
+              <strong class="row-assets"></strong>
+              <span class="row-assets-detail"></span>
+            </div>
           </td>
+          <td class="cell-wrap row-note-preview"></td>
           <td>
-            <a class="asset-link row-selfie-link" href="#" target="_blank" rel="noreferrer noopener">
-              <img class="asset-thumb row-selfie-thumb hidden" alt="Preview Selfie" />
-              <span class="asset-text row-selfie-text"></span>
-            </a>
-          </td>
-          <td class="cell-nowrap row-created"></td>
-          <td class="cell-nowrap row-updated"></td>
-          <td>
-            <div class="note-editor">
-              <textarea class="note-input row-note-input" placeholder="Isi catatan admin atau alasan reject"></textarea>
-              <div class="note-editor__footer">
-                <button class="button button--secondary button--tiny row-note-save">Simpan Catatan</button>
-                <span class="note-status row-note-status"></span>
-              </div>
+            <div class="activity-cell">
+              <span class="row-created"></span>
+              <span class="row-updated"></span>
             </div>
           </td>
           <td>
-            <div class="table-actions">
-              <button class="button button--approve button--small">Approve</button>
-              <button class="button button--reject button--small">Reject</button>
-              <button class="button button--suspend button--small">Suspend</button>
-            </div>
+            <button class="button button--secondary button--small row-view-button" type="button">Review</button>
           </td>
-        </tr>
-      </template>
-
-      <template id="uploadRowTemplate">
-        <tr>
-          <td><span class="status-pill"></span></td>
-          <td class="cell-code row-submission-id"></td>
-          <td class="cell-code row-submission-uid"></td>
-          <td class="cell-wrap row-submission-gmail"></td>
-          <td class="cell-wrap row-submission-project"></td>
-          <td class="cell-wrap row-submission-school"></td>
-          <td class="cell-nowrap row-submission-file-count"></td>
-          <td class="cell-wrap row-submission-files"></td>
-          <td class="cell-nowrap row-submission-created"></td>
-          <td class="cell-nowrap row-submission-uploaded"></td>
         </tr>
       </template>
     </div>
+
+    <div id="detailDrawerBackdrop" class="drawer-backdrop hidden"></div>
+    <aside id="detailDrawer" class="detail-drawer hidden" aria-hidden="true" aria-labelledby="drawerTitle">
+      <div class="drawer__header">
+        <div>
+          <div class="drawer__eyebrow">Review Registrasi</div>
+          <h2 id="drawerTitle">Pilih data registrasi</h2>
+          <p id="drawerMeta" class="drawer__meta">Klik tombol review pada tabel untuk membuka detail lengkap.</p>
+        </div>
+        <button id="detailDrawerCloseButton" class="icon-button" type="button" aria-label="Tutup panel detail">×</button>
+      </div>
+
+      <div class="drawer__body">
+        <section class="drawer-card drawer-card--accent">
+          <div class="drawer-status">
+            <span id="drawerStatusPill" class="status-pill">-</span>
+            <div class="drawer-status__copy">
+              <strong id="drawerPrimaryLabel">Belum ada registrasi dipilih</strong>
+              <span id="drawerUpdatedAt">-</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="drawer-card">
+          <h3>Profil teknisi</h3>
+          <div id="drawerFields" class="drawer-field-grid"></div>
+        </section>
+
+        <section class="drawer-card">
+          <h3>Berkas dan bukti</h3>
+          <div id="drawerAssets" class="drawer-asset-grid"></div>
+        </section>
+
+        <section class="drawer-card">
+          <div class="drawer-card__header">
+            <h3>Catatan admin</h3>
+            <span class="drawer-card__hint">Ctrl/Cmd + Enter untuk simpan cepat</span>
+          </div>
+          <textarea id="drawerNoteInput" class="note-input" placeholder="Isi catatan admin atau alasan reject/suspend"></textarea>
+          <div class="note-editor__footer">
+            <button id="drawerNoteSaveButton" class="button button--secondary" type="button">Simpan Catatan</button>
+            <span id="drawerNoteStatus" class="note-status"></span>
+          </div>
+        </section>
+
+        <section class="drawer-card">
+          <h3>Aksi review</h3>
+          <div class="drawer-actions">
+            <button id="drawerApproveButton" class="button button--approve" type="button">Approve</button>
+            <button id="drawerRejectButton" class="button button--reject" type="button">Reject</button>
+            <button id="drawerSuspendButton" class="button button--suspend" type="button">Suspend</button>
+          </div>
+        </section>
+      </div>
+    </aside>
 
     <script src="/admin/app.js"></script>
   </body>

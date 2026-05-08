@@ -1,62 +1,110 @@
-const tableBody = document.getElementById("tableBody");
-const tableScroll = document.getElementById("tableScroll");
-const emptyState = document.getElementById("emptyState");
-const errorBanner = document.getElementById("errorBanner");
-const detailToolbar = document.getElementById("detailToolbar");
-const summaryText = document.getElementById("summaryText");
-const exportButton = document.getElementById("exportButton");
-const statusFilter = document.getElementById("statusFilter");
-const statusFilterField = statusFilter.closest(".toolbar__field");
-const detailTabButton = document.getElementById("detailTabButton");
-const summaryTabButton = document.getElementById("summaryTabButton");
-const uploadSummaryTabButton = document.getElementById("uploadSummaryTabButton");
-const uploadBreakdownTabButton = document.getElementById("uploadBreakdownTabButton");
-const uploadRawTabButton = document.getElementById("uploadRawTabButton");
-const masterTabButton = document.getElementById("masterTabButton");
-const detailPanel = document.getElementById("detailPanel");
-const summaryPanel = document.getElementById("summaryPanel");
-const summaryScroll = document.getElementById("summaryScroll");
-const summaryBody = document.getElementById("summaryBody");
-const summaryEmptyState = document.getElementById("summaryEmptyState");
-const uploadSummaryPanel = document.getElementById("uploadSummaryPanel");
-const uploadSummaryScroll = document.getElementById("uploadSummaryScroll");
-const uploadSummaryBody = document.getElementById("uploadSummaryBody");
-const uploadSummaryEmptyState = document.getElementById("uploadSummaryEmptyState");
-const uploadBreakdownToolbar = document.getElementById("uploadBreakdownToolbar");
-const breakdownKabupatenFilter = document.getElementById("breakdownKabupatenFilter");
-const breakdownStatusFilter = document.getElementById("breakdownStatusFilter");
-const breakdownSearchInput = document.getElementById("breakdownSearchInput");
-const breakdownSummaryText = document.getElementById("breakdownSummaryText");
-const uploadBreakdownPanel = document.getElementById("uploadBreakdownPanel");
-const uploadBreakdownScroll = document.getElementById("uploadBreakdownScroll");
-const uploadBreakdownHead = document.getElementById("uploadBreakdownHead");
-const uploadBreakdownBody = document.getElementById("uploadBreakdownBody");
-const uploadBreakdownEmptyState = document.getElementById("uploadBreakdownEmptyState");
-const uploadRawPanel = document.getElementById("uploadRawPanel");
-const uploadTableScroll = document.getElementById("uploadTableScroll");
-const uploadTableHead = document.getElementById("uploadTableHead");
-const uploadTableBody = document.getElementById("uploadTableBody");
-const uploadEmptyState = document.getElementById("uploadEmptyState");
-const masterPanel = document.getElementById("masterPanel");
-const masterFileInput = document.getElementById("masterFileInput");
-const masterUploadButton = document.getElementById("masterUploadButton");
-const masterRefreshButton = document.getElementById("masterRefreshButton");
-const masterUploadStatus = document.getElementById("masterUploadStatus");
-const masterDataInfo = document.getElementById("masterDataInfo");
-const template = document.getElementById("rowTemplate");
+const ui = {
+  tableBody: document.getElementById("tableBody"),
+  tableScroll: document.getElementById("tableScroll"),
+  emptyState: document.getElementById("emptyState"),
+  errorBanner: document.getElementById("errorBanner"),
+  detailToolbar: document.getElementById("detailToolbar"),
+  summaryText: document.getElementById("summaryText"),
+  exportButton: document.getElementById("exportButton"),
+  statusFilter: document.getElementById("statusFilter"),
+  registrationSearchInput: document.getElementById("registrationSearchInput"),
+  detailTabButton: document.getElementById("detailTabButton"),
+  summaryTabButton: document.getElementById("summaryTabButton"),
+  uploadSummaryTabButton: document.getElementById("uploadSummaryTabButton"),
+  uploadBreakdownTabButton: document.getElementById("uploadBreakdownTabButton"),
+  uploadRawTabButton: document.getElementById("uploadRawTabButton"),
+  masterTabButton: document.getElementById("masterTabButton"),
+  detailPanel: document.getElementById("detailPanel"),
+  summaryPanel: document.getElementById("summaryPanel"),
+  summaryScroll: document.getElementById("summaryScroll"),
+  summaryBody: document.getElementById("summaryBody"),
+  summaryEmptyState: document.getElementById("summaryEmptyState"),
+  uploadSummaryPanel: document.getElementById("uploadSummaryPanel"),
+  uploadSummaryScroll: document.getElementById("uploadSummaryScroll"),
+  uploadSummaryBody: document.getElementById("uploadSummaryBody"),
+  uploadSummaryEmptyState: document.getElementById("uploadSummaryEmptyState"),
+  uploadBreakdownToolbar: document.getElementById("uploadBreakdownToolbar"),
+  breakdownKabupatenFilter: document.getElementById("breakdownKabupatenFilter"),
+  breakdownStatusFilter: document.getElementById("breakdownStatusFilter"),
+  breakdownSearchInput: document.getElementById("breakdownSearchInput"),
+  breakdownSummaryText: document.getElementById("breakdownSummaryText"),
+  uploadBreakdownPanel: document.getElementById("uploadBreakdownPanel"),
+  uploadBreakdownScroll: document.getElementById("uploadBreakdownScroll"),
+  uploadBreakdownHead: document.getElementById("uploadBreakdownHead"),
+  uploadBreakdownBody: document.getElementById("uploadBreakdownBody"),
+  uploadBreakdownEmptyState: document.getElementById("uploadBreakdownEmptyState"),
+  uploadRawPanel: document.getElementById("uploadRawPanel"),
+  uploadTableScroll: document.getElementById("uploadTableScroll"),
+  uploadTableHead: document.getElementById("uploadTableHead"),
+  uploadTableBody: document.getElementById("uploadTableBody"),
+  uploadEmptyState: document.getElementById("uploadEmptyState"),
+  masterPanel: document.getElementById("masterPanel"),
+  masterFileInput: document.getElementById("masterFileInput"),
+  masterUploadButton: document.getElementById("masterUploadButton"),
+  masterRefreshButton: document.getElementById("masterRefreshButton"),
+  masterUploadStatus: document.getElementById("masterUploadStatus"),
+  masterDataInfo: document.getElementById("masterDataInfo"),
+  masterColumnsValue: document.getElementById("masterColumnsValue"),
+  masterRowsValue: document.getElementById("masterRowsValue"),
+  masterUpdatedValue: document.getElementById("masterUpdatedValue"),
+  rowTemplate: document.getElementById("rowTemplate"),
+  heroViewName: document.getElementById("heroViewName"),
+  heroLastSync: document.getElementById("heroLastSync"),
+  heroRegistrationsCount: document.getElementById("heroRegistrationsCount"),
+  heroUploadsCount: document.getElementById("heroUploadsCount"),
+  heroMasterRowsCount: document.getElementById("heroMasterRowsCount"),
+  metricRegistrationsTotal: document.getElementById("metricRegistrationsTotal"),
+  metricRegistrationsPending: document.getElementById("metricRegistrationsPending"),
+  metricRegistrationsApproved: document.getElementById("metricRegistrationsApproved"),
+  metricRegistrationsAttention: document.getElementById("metricRegistrationsAttention"),
+  metricRegistrationAreas: document.getElementById("metricRegistrationAreas"),
+  metricUploadsTotal: document.getElementById("metricUploadsTotal"),
+  metricUploadsSchools: document.getElementById("metricUploadsSchools"),
+  metricUploadsPendingTarget: document.getElementById("metricUploadsPendingTarget"),
+  metricUploadsKabupaten: document.getElementById("metricUploadsKabupaten"),
+  metricUploadsCoverage: document.getElementById("metricUploadsCoverage"),
+  metricMasterRows: document.getElementById("metricMasterRows"),
+  metricMasterColumns: document.getElementById("metricMasterColumns"),
+  metricMasterUpdated: document.getElementById("metricMasterUpdated"),
+  metricActiveView: document.getElementById("metricActiveView"),
+  metricMasterDataset: document.getElementById("metricMasterDataset"),
+  detailDrawerBackdrop: document.getElementById("detailDrawerBackdrop"),
+  detailDrawer: document.getElementById("detailDrawer"),
+  detailDrawerCloseButton: document.getElementById("detailDrawerCloseButton"),
+  drawerTitle: document.getElementById("drawerTitle"),
+  drawerMeta: document.getElementById("drawerMeta"),
+  drawerStatusPill: document.getElementById("drawerStatusPill"),
+  drawerPrimaryLabel: document.getElementById("drawerPrimaryLabel"),
+  drawerUpdatedAt: document.getElementById("drawerUpdatedAt"),
+  drawerFields: document.getElementById("drawerFields"),
+  drawerAssets: document.getElementById("drawerAssets"),
+  drawerNoteInput: document.getElementById("drawerNoteInput"),
+  drawerNoteSaveButton: document.getElementById("drawerNoteSaveButton"),
+  drawerNoteStatus: document.getElementById("drawerNoteStatus"),
+  drawerApproveButton: document.getElementById("drawerApproveButton"),
+  drawerRejectButton: document.getElementById("drawerRejectButton"),
+  drawerSuspendButton: document.getElementById("drawerSuspendButton"),
+};
+
+const statusFilterField = ui.statusFilter.closest(".toolbar__field");
+const registrationSearchField = ui.registrationSearchInput.closest(".toolbar__field");
+
 let currentItems = [];
+let visibleRegistrationItems = [];
 let summaryItems = [];
 let uploadItems = [];
 let breakdownRows = [];
 let activeTab = "summary-registrations";
 let currentMasterData = null;
+let selectedRegistrationId = null;
+let lastSyncAt = "";
 
 async function loadRegistrations() {
   setLoading(true);
   hideError();
 
   try {
-    const query = statusFilter.value ? `?status=${encodeURIComponent(statusFilter.value)}` : "";
+    const query = ui.statusFilter.value ? `?status=${encodeURIComponent(ui.statusFilter.value)}` : "";
     const [response, summaryResponse] = await Promise.all([
       fetch(`/api/admin/registrations${query}`),
       fetch("/api/admin/registrations"),
@@ -76,23 +124,25 @@ async function loadRegistrations() {
 
     currentItems = Array.isArray(payload.items) ? payload.items : [];
     summaryItems = Array.isArray(summaryPayload.items) ? summaryPayload.items : [];
-    renderRows(currentItems);
+
+    renderRows();
     renderSummary(summaryItems);
     renderSubmissionRows(uploadItems);
-    if (activeTab === "detail-registrations") {
-      summaryText.textContent = statusFilter.value
-        ? `${payload.count || currentItems.length} data sesuai filter, ${summaryPayload.count || summaryItems.length} total registrasi`
-        : `${summaryPayload.count || summaryItems.length} total data registrasi`;
-    }
+    refreshToolbarSummary();
+    updateDashboardMetrics();
+    refreshSelectedRegistration();
+    touchLastSync();
   } catch (error) {
     currentItems = [];
     summaryItems = [];
-    renderRows([]);
+    renderRows();
     renderSummary([]);
+    refreshToolbarSummary();
+    updateDashboardMetrics();
+    refreshSelectedRegistration();
     showError(error.message || "Terjadi kesalahan.");
   } finally {
     setLoading(false);
-    updateExportButtonState();
   }
 }
 
@@ -111,19 +161,16 @@ async function loadSubmissions() {
     renderSubmissionRows(uploadItems);
     renderSubmissionSummary(uploadItems);
     refreshSubmissionBreakdown();
-    if (activeTab === "detail-submissions") {
-      summaryText.textContent = uploadItems.length
-        ? `${uploadItems.length} total raw data upload`
-        : "Belum ada raw data upload yang masuk.";
-    }
+    refreshToolbarSummary();
+    updateDashboardMetrics();
+    touchLastSync();
   } catch (error) {
     uploadItems = [];
     renderSubmissionRows([]);
     renderSubmissionSummary([]);
     refreshSubmissionBreakdown();
-    if (activeTab === "detail-submissions") {
-      summaryText.textContent = "Belum ada raw data upload yang masuk.";
-    }
+    refreshToolbarSummary();
+    updateDashboardMetrics();
     showError(error.message || "Gagal memuat data upload.");
   } finally {
     updateExportButtonState();
@@ -140,167 +187,108 @@ async function loadMasterDataInfo() {
     }
 
     currentMasterData = payload;
-    const columns = Array.isArray(payload.columns) ? payload.columns : [];
-    const rows = Array.isArray(payload.rows) ? payload.rows : [];
-    masterDataInfo.textContent = [
-      `Dataset: ${payload.title || "Master Lokasi Sekolah"}`,
-      `Kolom: ${columns.length ? columns.join(" -> ") : "-"}`,
-      `Jumlah baris: ${rows.length}`,
-      `Update terakhir: ${formatDate(payload.updatedAt)}`,
-    ].join(" | ");
+    renderMasterDataInfo(payload);
     renderSubmissionSummary(uploadItems);
     renderSubmissionRows(uploadItems);
     refreshSubmissionBreakdown();
+    refreshToolbarSummary();
+    updateDashboardMetrics();
+    touchLastSync();
   } catch (error) {
     currentMasterData = null;
-    masterDataInfo.textContent = error.message || "Belum bisa memuat info master data.";
-    showError(error.message || "Belum bisa memuat info master data.");
+    renderMasterDataInfo(null, error.message || "Belum bisa memuat info master data.");
     renderSubmissionSummary(uploadItems);
     renderSubmissionRows(uploadItems);
     refreshSubmissionBreakdown();
+    refreshToolbarSummary();
+    updateDashboardMetrics();
+    showError(error.message || "Belum bisa memuat info master data.");
   }
 }
 
-function renderRows(items) {
-  tableBody.innerHTML = "";
+function renderMasterDataInfo(payload, errorMessage = "") {
+  const columns = Array.isArray(payload?.columns) ? payload.columns : [];
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
 
-  if (!items.length) {
-    tableScroll.classList.add("hidden");
-    emptyState.classList.remove("hidden");
+  ui.masterColumnsValue.textContent = formatCompactNumber(columns.length);
+  ui.masterRowsValue.textContent = formatCompactNumber(rows.length);
+  ui.masterUpdatedValue.textContent = payload?.updatedAt ? formatDate(payload.updatedAt) : "-";
+
+  ui.masterDataInfo.textContent = errorMessage || (
+    columns.length
+      ? `Dataset ${payload.title || "Master Lokasi Sekolah"} memakai urutan kolom ${columns.join(" -> ")}.`
+      : "Belum ada struktur kolom yang aktif."
+  );
+}
+
+function renderRows() {
+  ui.tableBody.innerHTML = "";
+  visibleRegistrationItems = getVisibleRegistrationItems();
+
+  if (!currentItems.length) {
+    ui.tableScroll.classList.add("hidden");
+    ui.emptyState.textContent = "Belum ada data registrasi yang masuk.";
+    ui.emptyState.classList.remove("hidden");
+    updateExportButtonState();
     return;
   }
 
-  tableScroll.classList.remove("hidden");
-  emptyState.classList.add("hidden");
+  if (!visibleRegistrationItems.length) {
+    ui.tableScroll.classList.add("hidden");
+    ui.emptyState.textContent = "Tidak ada registrasi yang cocok dengan filter atau pencarian.";
+    ui.emptyState.classList.remove("hidden");
+    updateExportButtonState();
+    return;
+  }
 
-  items.forEach((item) => {
-    const fragment = template.content.cloneNode(true);
-    const row = fragment.querySelector("tr");
+  ui.tableScroll.classList.remove("hidden");
+  ui.emptyState.classList.add("hidden");
+
+  visibleRegistrationItems.forEach((item) => {
+    const fragment = ui.rowTemplate.content.cloneNode(true);
     const statusPill = fragment.querySelector(".status-pill");
-    const registrationId = fragment.querySelector(".row-registration-id");
-    const uid = fragment.querySelector(".row-uid");
-    const gmail = fragment.querySelector(".row-gmail");
     const name = fragment.querySelector(".row-name");
-    const nik = fragment.querySelector(".row-nik");
-    const alamat = fragment.querySelector(".row-alamat");
-    const noHp = fragment.querySelector(".row-nohp");
-    const rekening = fragment.querySelector(".row-rekening");
-    const bank = fragment.querySelector(".row-bank");
-    const pemilik = fragment.querySelector(".row-pemilik");
+    const meta = fragment.querySelector(".row-meta");
     const area = fragment.querySelector(".row-area");
-    const ktpLink = fragment.querySelector(".row-ktp-link");
-    const ktpThumb = fragment.querySelector(".row-ktp-thumb");
-    const ktpText = fragment.querySelector(".row-ktp-text");
-    const selfieLink = fragment.querySelector(".row-selfie-link");
-    const selfieThumb = fragment.querySelector(".row-selfie-thumb");
-    const selfieText = fragment.querySelector(".row-selfie-text");
+    const assets = fragment.querySelector(".row-assets");
+    const assetsDetail = fragment.querySelector(".row-assets-detail");
+    const notePreview = fragment.querySelector(".row-note-preview");
     const created = fragment.querySelector(".row-created");
     const updated = fragment.querySelector(".row-updated");
-    const noteInput = fragment.querySelector(".row-note-input");
-    const noteSaveButton = fragment.querySelector(".row-note-save");
-    const noteStatus = fragment.querySelector(".row-note-status");
-    const approveButton = fragment.querySelector(".button--approve");
-    const rejectButton = fragment.querySelector(".button--reject");
-    const suspendButton = fragment.querySelector(".button--suspend");
-    const initialNote = item.adminNote || item.rejectionReason || "";
+    const viewButton = fragment.querySelector(".row-view-button");
+
+    const assetSummary = summarizeRegistrationAssets(item);
 
     statusPill.textContent = item.status || "-";
     statusPill.dataset.status = item.status || "";
+    name.textContent = item.nama || item.displayName || "Tanpa nama";
+    meta.textContent = [item.gmail || "-", item.uid || "-"].join(" • ");
+    area.textContent = item.areaKerja || item.kabupaten || "Belum diisi";
+    assets.textContent = assetSummary.title;
+    assetsDetail.textContent = assetSummary.detail;
+    notePreview.textContent = truncateText(item.adminNote || item.rejectionReason || "Belum ada catatan admin.", 120);
+    created.textContent = `Dibuat ${formatDate(item.createdAt)}`;
+    updated.textContent = `Update ${formatDate(item.updatedAt)}`;
 
-    registrationId.textContent = item.registrationId || "-";
-    uid.textContent = item.uid || "-";
-    gmail.textContent = item.gmail || "-";
-    name.textContent = item.nama || item.displayName || "-";
-    nik.textContent = item.nik || "-";
-    alamat.textContent = item.alamat || "-";
-    noHp.textContent = item.noHp || "-";
-    rekening.textContent = item.noRekening || "-";
-    bank.textContent = item.namaBank || "-";
-    pemilik.textContent = item.namaPemilik || "-";
-    area.textContent = item.areaKerja || "-";
-    applyAssetCell(
-      ktpLink,
-      ktpThumb,
-      ktpText,
-      item.ktpDriveFileId,
-      item.ktpLocalPath,
-      "KTP"
-    );
-    applyAssetCell(
-      selfieLink,
-      selfieThumb,
-      selfieText,
-      item.selfieDriveFileId,
-      item.selfieLocalPath,
-      "Selfie"
-    );
-    created.textContent = formatDate(item.createdAt);
-    updated.textContent = formatDate(item.updatedAt);
-    noteInput.value = initialNote;
-    setNoteStatus(noteStatus, "", "");
-
-    approveButton.disabled = item.status === "APPROVED";
-    rejectButton.disabled = item.status === "REJECTED";
-    suspendButton.disabled = item.status === "SUSPENDED";
-
-    noteInput.addEventListener("input", () => {
-      item.adminNote = noteInput.value.trim();
-      if (item.status === "REJECTED" || item.status === "SUSPENDED") {
-        item.rejectionReason = item.adminNote;
-      }
-      setNoteStatus(noteStatus, "Belum disimpan", "dirty");
-    });
-
-    noteInput.addEventListener("keydown", async (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-        event.preventDefault();
-        await saveNote(item, noteInput, noteStatus, noteSaveButton, updated);
-      }
-    });
-
-    noteSaveButton.addEventListener("click", async () => {
-      await saveNote(item, noteInput, noteStatus, noteSaveButton, updated);
-    });
-
-    approveButton.addEventListener("click", () => updateStatus(item.registrationId, "approve", {
-      adminNote: noteInput.value.trim(),
-    }));
-    rejectButton.addEventListener("click", async () => {
-      const adminNote = noteInput.value.trim();
-      if (!adminNote) {
-        showError("Isi kolom catatan terlebih dahulu untuk alasan reject.");
-        noteInput.focus();
-        return;
-      }
-      await updateStatus(item.registrationId, "reject", { adminNote });
-    });
-    suspendButton.addEventListener("click", async () => {
-      const adminNote = noteInput.value.trim();
-      if (!adminNote) {
-        showError("Isi kolom catatan terlebih dahulu untuk alasan suspend.");
-        noteInput.focus();
-        return;
-      }
-      await updateStatus(item.registrationId, "suspend", { adminNote });
-    });
-
-    row.dataset.status = item.status || "";
-    tableBody.appendChild(row);
+    viewButton.addEventListener("click", () => openRegistrationDrawer(item));
+    ui.tableBody.appendChild(fragment);
   });
+
+  updateExportButtonState();
 }
 
 function renderSummary(items) {
-  summaryBody.innerHTML = "";
+  ui.summaryBody.innerHTML = "";
 
   if (!items.length) {
-    summaryScroll.classList.add("hidden");
-    summaryEmptyState.classList.remove("hidden");
+    ui.summaryScroll.classList.add("hidden");
+    ui.summaryEmptyState.classList.remove("hidden");
     return;
   }
 
   const { rows, totals } = buildAreaSummary(items);
-  summaryScroll.classList.remove("hidden");
-  summaryEmptyState.classList.add("hidden");
+  ui.summaryScroll.classList.remove("hidden");
+  ui.summaryEmptyState.classList.add("hidden");
 
   rows.forEach((row) => {
     const tr = document.createElement("tr");
@@ -312,7 +300,7 @@ function renderSummary(items) {
       <td class="cell-nowrap">${row.suspended}</td>
       <td class="cell-nowrap cell-strong">${row.total}</td>
     `;
-    summaryBody.appendChild(tr);
+    ui.summaryBody.appendChild(tr);
   });
 
   const totalRow = document.createElement("tr");
@@ -325,21 +313,22 @@ function renderSummary(items) {
     <td class="cell-nowrap cell-strong">${totals.suspended}</td>
     <td class="cell-nowrap cell-strong">${totals.total}</td>
   `;
-  summaryBody.appendChild(totalRow);
+  ui.summaryBody.appendChild(totalRow);
 }
 
 function renderSubmissionRows(items) {
-  uploadTableHead.innerHTML = "";
-  uploadTableBody.innerHTML = "";
+  ui.uploadTableHead.innerHTML = "";
+  ui.uploadTableBody.innerHTML = "";
 
   if (!items.length) {
-    uploadTableScroll.classList.add("hidden");
-    uploadEmptyState.classList.remove("hidden");
+    ui.uploadTableScroll.classList.add("hidden");
+    ui.uploadEmptyState.classList.remove("hidden");
     return;
   }
 
-  uploadTableScroll.classList.remove("hidden");
-  uploadEmptyState.classList.add("hidden");
+  ui.uploadTableScroll.classList.remove("hidden");
+  ui.uploadEmptyState.classList.add("hidden");
+
   const orderedItems = getSubmissionRawItems(items);
   const locationColumns = getSubmissionLocationColumns(orderedItems);
   const photoColumns = getSubmissionPhotoColumns(orderedItems);
@@ -361,10 +350,8 @@ function renderSubmissionRows(items) {
   ];
 
   const headerRow = document.createElement("tr");
-  headerRow.innerHTML = headerColumns
-    .map((column) => `<th>${escapeHtml(column)}</th>`)
-    .join("");
-  uploadTableHead.appendChild(headerRow);
+  headerRow.innerHTML = headerColumns.map((column) => `<th>${escapeHtml(column)}</th>`).join("");
+  ui.uploadTableHead.appendChild(headerRow);
 
   orderedItems.forEach((item, index) => {
     const parsed = parseSubmissionAnswers(item);
@@ -411,22 +398,22 @@ function renderSubmissionRows(items) {
     cells.push(createTextCell(formatDate(item.uploadedAt), "cell-nowrap"));
 
     cells.forEach((cell) => tr.appendChild(cell));
-    uploadTableBody.appendChild(tr);
+    ui.uploadTableBody.appendChild(tr);
   });
 }
 
 function renderSubmissionSummary(items) {
-  uploadSummaryBody.innerHTML = "";
+  ui.uploadSummaryBody.innerHTML = "";
+  const { rows, totals } = buildSubmissionSummary(items);
 
-  if (!items.length) {
-    uploadSummaryScroll.classList.add("hidden");
-    uploadSummaryEmptyState.classList.remove("hidden");
+  if (!rows.length) {
+    ui.uploadSummaryScroll.classList.add("hidden");
+    ui.uploadSummaryEmptyState.classList.remove("hidden");
     return;
   }
 
-  const { rows, totals } = buildSubmissionSummary(items);
-  uploadSummaryScroll.classList.remove("hidden");
-  uploadSummaryEmptyState.classList.add("hidden");
+  ui.uploadSummaryScroll.classList.remove("hidden");
+  ui.uploadSummaryEmptyState.classList.add("hidden");
 
   rows.forEach((row) => {
     const tr = document.createElement("tr");
@@ -436,7 +423,7 @@ function renderSubmissionSummary(items) {
       <td class="cell-nowrap">${row.achv}</td>
       <td class="cell-nowrap">${row.toBeAchv}</td>
     `;
-    uploadSummaryBody.appendChild(tr);
+    ui.uploadSummaryBody.appendChild(tr);
   });
 
   const totalRow = document.createElement("tr");
@@ -447,7 +434,7 @@ function renderSubmissionSummary(items) {
     <td class="cell-nowrap cell-strong">${totals.achv}</td>
     <td class="cell-nowrap cell-strong">${totals.toBeAchv}</td>
   `;
-  uploadSummaryBody.appendChild(totalRow);
+  ui.uploadSummaryBody.appendChild(totalRow);
 }
 
 function refreshSubmissionBreakdown() {
@@ -457,13 +444,14 @@ function refreshSubmissionBreakdown() {
 }
 
 function renderSubmissionBreakdown(rows) {
-  uploadBreakdownHead.innerHTML = "";
-  uploadBreakdownBody.innerHTML = "";
+  ui.uploadBreakdownHead.innerHTML = "";
+  ui.uploadBreakdownBody.innerHTML = "";
 
   if (!rows.length) {
-    uploadBreakdownScroll.classList.add("hidden");
-    uploadBreakdownEmptyState.classList.remove("hidden");
-    breakdownSummaryText.textContent = "Belum ada master data sekolah untuk diringkas.";
+    ui.uploadBreakdownScroll.classList.add("hidden");
+    ui.uploadBreakdownEmptyState.classList.remove("hidden");
+    ui.breakdownSummaryText.textContent = "Belum ada master data sekolah untuk diringkas.";
+    updateExportButtonState();
     return;
   }
 
@@ -472,21 +460,20 @@ function renderSubmissionBreakdown(rows) {
   const headerColumns = [...locationColumns, "Status"];
 
   const headerRow = document.createElement("tr");
-  headerRow.innerHTML = headerColumns
-    .map((column) => `<th>${escapeHtml(column)}</th>`)
-    .join("");
-  uploadBreakdownHead.appendChild(headerRow);
+  headerRow.innerHTML = headerColumns.map((column) => `<th>${escapeHtml(column)}</th>`).join("");
+  ui.uploadBreakdownHead.appendChild(headerRow);
 
   if (!filteredRows.length) {
-    uploadBreakdownScroll.classList.add("hidden");
-    uploadBreakdownEmptyState.classList.remove("hidden");
-    breakdownSummaryText.textContent = "Tidak ada sekolah yang cocok dengan filter atau pencarian.";
+    ui.uploadBreakdownScroll.classList.add("hidden");
+    ui.uploadBreakdownEmptyState.classList.remove("hidden");
+    ui.breakdownSummaryText.textContent = "Tidak ada sekolah yang cocok dengan filter atau pencarian.";
+    updateExportButtonState();
     return;
   }
 
-  uploadBreakdownScroll.classList.remove("hidden");
-  uploadBreakdownEmptyState.classList.add("hidden");
-  breakdownSummaryText.textContent = `${filteredRows.length} dari ${rows.length} sekolah tampil`;
+  ui.uploadBreakdownScroll.classList.remove("hidden");
+  ui.uploadBreakdownEmptyState.classList.add("hidden");
+  ui.breakdownSummaryText.textContent = `${filteredRows.length} dari ${rows.length} sekolah tampil`;
 
   filteredRows.forEach((row) => {
     const tr = document.createElement("tr");
@@ -494,14 +481,19 @@ function renderSubmissionBreakdown(rows) {
       tr.appendChild(createTextCell(row.values[column], "cell-wrap"));
     });
     tr.appendChild(createStatusCell(row.status));
-    uploadBreakdownBody.appendChild(tr);
+    ui.uploadBreakdownBody.appendChild(tr);
   });
+
+  updateExportButtonState();
 }
 
-async function saveNote(item, noteInput, noteStatus, noteSaveButton, updatedCell) {
-  const adminNote = noteInput.value.trim();
-  setNoteStatus(noteStatus, "Menyimpan...", "saving");
-  noteSaveButton.disabled = true;
+async function saveSelectedRegistrationNote() {
+  const item = findRegistrationById(selectedRegistrationId);
+  if (!item) return;
+
+  const adminNote = ui.drawerNoteInput.value.trim();
+  setDrawerNoteState("Menyimpan...", "saving");
+  ui.drawerNoteSaveButton.disabled = true;
 
   try {
     const response = await fetch(`/api/admin/registrations/${item.registrationId}/note`, {
@@ -517,30 +509,47 @@ async function saveNote(item, noteInput, noteStatus, noteSaveButton, updatedCell
       throw new Error(payload.error || "Gagal menyimpan catatan.");
     }
 
-    item.adminNote = payload.adminNote || "";
-    item.rejectionReason = payload.rejectionReason || item.rejectionReason || "";
-    item.updatedAt = payload.updatedAt || item.updatedAt;
-    noteInput.value = item.adminNote || item.rejectionReason || "";
-    updatedCell.textContent = formatDate(item.updatedAt);
-    setNoteStatus(noteStatus, "Tersimpan", "saved");
+    mergeRegistrationRecord({
+      registrationId: item.registrationId,
+      adminNote: payload.adminNote || "",
+      rejectionReason: payload.rejectionReason || item.rejectionReason || "",
+      updatedAt: payload.updatedAt || item.updatedAt,
+    });
+
+    renderRows();
+    refreshToolbarSummary();
+    refreshSelectedRegistration("Tersimpan");
+    updateDashboardMetrics();
+    touchLastSync();
   } catch (error) {
-    setNoteStatus(noteStatus, error.message || "Gagal menyimpan", "error");
+    setDrawerNoteState(error.message || "Gagal menyimpan", "error");
     showError(error.message || "Terjadi kesalahan.");
   } finally {
-    noteSaveButton.disabled = false;
+    ui.drawerNoteSaveButton.disabled = false;
   }
 }
 
-async function updateStatus(registrationId, action, body = {}) {
+async function updateSelectedRegistrationStatus(action) {
+  const item = findRegistrationById(selectedRegistrationId);
+  if (!item) return;
+
+  const adminNote = ui.drawerNoteInput.value.trim();
+  if ((action === "reject" || action === "suspend") && !adminNote) {
+    showError(`Isi catatan terlebih dahulu untuk alasan ${action === "reject" ? "reject" : "suspend"}.`);
+    ui.drawerNoteInput.focus();
+    return;
+  }
+
   hideError();
+  setDrawerActionLoading(true);
 
   try {
-    const response = await fetch(`/api/admin/registrations/${registrationId}/${action}`, {
+    const response = await fetch(`/api/admin/registrations/${item.registrationId}/${action}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ adminNote }),
     });
 
     const payload = await response.json();
@@ -549,8 +558,12 @@ async function updateStatus(registrationId, action, body = {}) {
     }
 
     await loadRegistrations();
+    refreshSelectedRegistration("Status berhasil diperbarui.");
+    touchLastSync();
   } catch (error) {
     showError(error.message || "Terjadi kesalahan.");
+  } finally {
+    setDrawerActionLoading(false);
   }
 }
 
@@ -559,34 +572,96 @@ function setLoading(isLoading) {
 }
 
 function setMasterUploadState(message, state = "") {
-  masterUploadStatus.textContent = message;
-  masterUploadStatus.dataset.state = state;
+  ui.masterUploadStatus.textContent = message;
+  ui.masterUploadStatus.dataset.state = state || "";
 }
 
 function showError(message) {
-  errorBanner.textContent = message;
-  errorBanner.classList.remove("hidden");
+  ui.errorBanner.textContent = message;
+  ui.errorBanner.classList.remove("hidden");
 }
 
 function hideError() {
-  errorBanner.textContent = "";
-  errorBanner.classList.add("hidden");
+  ui.errorBanner.textContent = "";
+  ui.errorBanner.classList.add("hidden");
 }
 
-function setNoteStatus(element, message, state) {
-  element.textContent = message;
-  element.dataset.state = state || "";
+function setDrawerNoteState(message, state = "") {
+  ui.drawerNoteStatus.textContent = message;
+  ui.drawerNoteStatus.dataset.state = state || "";
+}
+
+function refreshToolbarSummary() {
+  if (activeTab === "detail-registrations") {
+    const visibleCount = visibleRegistrationItems.length;
+    const filteredCount = currentItems.length;
+    const totalCount = summaryItems.length;
+    const hasSearch = Boolean(ui.registrationSearchInput.value.trim());
+    const hasStatusFilter = Boolean(ui.statusFilter.value);
+
+    if (!filteredCount) {
+      ui.summaryText.textContent = "Belum ada registrasi yang cocok dengan filter status saat ini.";
+      return;
+    }
+
+    if (hasSearch) {
+      ui.summaryText.textContent = `${visibleCount} data tampil dari ${filteredCount} registrasi sesuai status, ${totalCount} total registrasi.`;
+      return;
+    }
+
+    ui.summaryText.textContent = hasStatusFilter
+      ? `${filteredCount} registrasi sesuai status, ${totalCount} total registrasi.`
+      : `${totalCount} total registrasi siap direview.`;
+    return;
+  }
+
+  if (activeTab === "summary-registrations") {
+    const areaCount = buildAreaSummary(summaryItems).rows.length;
+    ui.summaryText.textContent = summaryItems.length
+      ? `${summaryItems.length} registrasi diringkas ke ${areaCount} area kerja.`
+      : "Belum ada data registrasi untuk diringkas.";
+    return;
+  }
+
+  if (activeTab === "summary-submissions") {
+    const summary = buildSubmissionSummary(uploadItems);
+    ui.summaryText.textContent = summary.rows.length
+      ? `${summary.totals.achv} sekolah tercapai dari ${summary.totals.target} target.`
+      : "Belum ada master data atau upload yang bisa diringkas.";
+    return;
+  }
+
+  if (activeTab === "breakdown-submissions") {
+    ui.summaryText.textContent = breakdownRows.length
+      ? `${breakdownRows.length} sekolah master tersedia untuk audit progres lapangan.`
+      : "Belum ada master data sekolah yang bisa dipecah.";
+    return;
+  }
+
+  if (activeTab === "detail-submissions") {
+    ui.summaryText.textContent = uploadItems.length
+      ? `${uploadItems.length} raw upload tersimpan di backend.`
+      : "Belum ada raw data upload yang masuk.";
+    return;
+  }
+
+  ui.summaryText.textContent = "Kelola data master sekolah dari panel ini.";
 }
 
 function updateExportButtonState(isLoading = false) {
-  const hasRows = activeTab === "detail-registrations"
-    ? currentItems.length > 0
-    : activeTab === "summary-registrations"
-      ? summaryItems.length > 0
-      : activeTab === "summary-submissions" || activeTab === "detail-submissions" || activeTab === "breakdown-submissions"
-        ? uploadItems.length > 0
-        : false;
-  exportButton.disabled = isLoading || !hasRows;
+  const hasRows = activeTab === "summary-registrations"
+    ? summaryItems.length > 0
+    : activeTab === "detail-registrations"
+      ? visibleRegistrationItems.length > 0
+      : activeTab === "summary-submissions"
+        ? buildSubmissionSummary(uploadItems).rows.length > 0
+        : activeTab === "breakdown-submissions"
+          ? filterSubmissionBreakdownRows(breakdownRows).length > 0
+          : activeTab === "detail-submissions"
+            ? uploadItems.length > 0
+            : false;
+
+  ui.exportButton.disabled = isLoading || !hasRows;
 }
 
 function formatDate(value) {
@@ -599,23 +674,198 @@ function formatDate(value) {
   }).format(date);
 }
 
-function applyAssetCell(linkEl, imageEl, textEl, remoteUrl, fallbackPath, label) {
-  const hasPreview = typeof remoteUrl === "string" && remoteUrl.startsWith("/uploads/");
-  const displayText = hasPreview
-    ? "Lihat gambar"
-    : trimAssetLabel(fallbackPath) || `${label} belum diupload`;
+function formatCompactNumber(value) {
+  return new Intl.NumberFormat("id-ID").format(Number(value) || 0);
+}
 
-  textEl.textContent = displayText;
+function truncateText(value, limit = 100) {
+  const normalized = String(value || "").trim();
+  if (normalized.length <= limit) return normalized;
+  return `${normalized.slice(0, limit - 1)}…`;
+}
+
+function summarizeRegistrationAssets(item) {
+  const assets = [
+    item.ktpDriveFileId || item.ktpLocalPath ? "KTP" : "",
+    item.selfieDriveFileId || item.selfieLocalPath ? "Selfie" : "",
+  ].filter(Boolean);
+
+  if (!assets.length) {
+    return {
+      title: "Belum ada aset",
+      detail: "Menunggu upload berkas dari APK",
+    };
+  }
+
+  return {
+    title: `${assets.length}/2 aset tersedia`,
+    detail: assets.join(" • "),
+  };
+}
+
+function openRegistrationDrawer(item) {
+  selectedRegistrationId = item.registrationId;
+  fillRegistrationDrawer(item);
+  ui.detailDrawer.classList.remove("hidden");
+  ui.detailDrawerBackdrop.classList.remove("hidden");
+  ui.detailDrawer.setAttribute("aria-hidden", "false");
+  document.body.classList.add("drawer-open");
+}
+
+function closeRegistrationDrawer() {
+  selectedRegistrationId = null;
+  ui.detailDrawer.classList.add("hidden");
+  ui.detailDrawerBackdrop.classList.add("hidden");
+  ui.detailDrawer.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("drawer-open");
+  setDrawerActionAvailability(null);
+  setDrawerNoteState("", "");
+}
+
+function refreshSelectedRegistration(successMessage = "") {
+  if (!selectedRegistrationId || ui.detailDrawer.classList.contains("hidden")) {
+    return;
+  }
+
+  const item = findRegistrationById(selectedRegistrationId);
+  if (!item) {
+    closeRegistrationDrawer();
+    return;
+  }
+
+  fillRegistrationDrawer(item, successMessage);
+}
+
+function fillRegistrationDrawer(item, successMessage = "") {
+  ui.drawerStatusPill.textContent = item.status || "-";
+  ui.drawerStatusPill.dataset.status = item.status || "";
+  ui.drawerTitle.textContent = item.nama || item.displayName || "Tanpa nama";
+  ui.drawerMeta.textContent = [item.gmail || "-", item.uid || "-", item.areaKerja || item.kabupaten || "Belum diisi"]
+    .filter(Boolean)
+    .join(" • ");
+  ui.drawerPrimaryLabel.textContent = item.registrationId || "-";
+  ui.drawerUpdatedAt.textContent = `Diperbarui ${formatDate(item.updatedAt)}`;
+  ui.drawerNoteInput.value = item.adminNote || item.rejectionReason || "";
+  renderDrawerFields(item);
+  renderDrawerAssets(item);
+  setDrawerActionAvailability(item);
+  setDrawerNoteState(successMessage, successMessage ? "saved" : "");
+}
+
+function renderDrawerFields(item) {
+  ui.drawerFields.innerHTML = "";
+
+  const fields = [
+    ["Registration ID", item.registrationId],
+    ["UID", item.uid],
+    ["Gmail", item.gmail],
+    ["Nama", item.nama || item.displayName],
+    ["NIK", item.nik],
+    ["No HP", item.noHp],
+    ["No Rekening", item.noRekening],
+    ["Nama Bank", item.namaBank],
+    ["Nama Pemilik", item.namaPemilik],
+    ["Area Kerja", item.areaKerja],
+    ["Alamat", buildAddressSummary(item)],
+    ["Dibuat", formatDate(item.createdAt)],
+    ["Update", formatDate(item.updatedAt)],
+  ];
+
+  if (item.rejectionReason) {
+    fields.push(["Alasan Terakhir", item.rejectionReason]);
+  }
+
+  fields.forEach(([label, value]) => {
+    const card = document.createElement("div");
+    card.className = "detail-item";
+    card.innerHTML = `
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value || "-")}</strong>
+    `;
+    ui.drawerFields.appendChild(card);
+  });
+}
+
+function renderDrawerAssets(item) {
+  ui.drawerAssets.innerHTML = "";
+  ui.drawerAssets.appendChild(createAssetCard("KTP", item.ktpDriveFileId, item.ktpLocalPath));
+  ui.drawerAssets.appendChild(createAssetCard("Selfie", item.selfieDriveFileId, item.selfieLocalPath));
+}
+
+function createAssetCard(label, remoteUrl, fallbackPath) {
+  const href = resolveAssetHref(remoteUrl);
+  const hasPreview = Boolean(href && href.startsWith("/uploads/"));
+  const card = document.createElement(href ? "a" : "div");
+  card.className = "asset-card";
+
+  if (href) {
+    card.href = href;
+    card.target = "_blank";
+    card.rel = "noreferrer noopener";
+  }
 
   if (hasPreview) {
-    linkEl.href = remoteUrl;
-    imageEl.src = remoteUrl;
-    imageEl.classList.remove("hidden");
-  } else {
-    linkEl.removeAttribute("href");
-    imageEl.removeAttribute("src");
-    imageEl.classList.add("hidden");
+    const image = document.createElement("img");
+    image.src = href;
+    image.alt = `Preview ${label}`;
+    card.appendChild(image);
   }
+
+  const copy = document.createElement("div");
+  copy.className = "asset-card__copy";
+
+  const title = document.createElement("strong");
+  title.className = "asset-card__title";
+  title.textContent = label;
+
+  const status = document.createElement("span");
+  status.textContent = href
+    ? "Berkas tersedia untuk dibuka."
+    : trimAssetLabel(fallbackPath) || "Belum ada berkas yang tersimpan.";
+
+  const hint = document.createElement("span");
+  hint.textContent = href
+    ? (hasPreview ? "Klik kartu untuk membuka gambar penuh." : "Klik kartu untuk membuka file.")
+    : "Menunggu upload asset dari APK.";
+
+  copy.appendChild(title);
+  copy.appendChild(status);
+  copy.appendChild(hint);
+  card.appendChild(copy);
+
+  return card;
+}
+
+function setDrawerActionAvailability(item) {
+  const hasSelection = Boolean(item);
+  const status = item?.status || "";
+  ui.drawerNoteInput.disabled = !hasSelection;
+  ui.drawerNoteSaveButton.disabled = !hasSelection;
+  ui.drawerApproveButton.disabled = !hasSelection || status === "APPROVED";
+  ui.drawerRejectButton.disabled = !hasSelection || status === "REJECTED";
+  ui.drawerSuspendButton.disabled = !hasSelection || status === "SUSPENDED";
+}
+
+function setDrawerActionLoading(isLoading) {
+  if (isLoading) {
+    ui.drawerNoteInput.disabled = true;
+    ui.drawerNoteSaveButton.disabled = true;
+    ui.drawerApproveButton.disabled = true;
+    ui.drawerRejectButton.disabled = true;
+    ui.drawerSuspendButton.disabled = true;
+    return;
+  }
+
+  const item = findRegistrationById(selectedRegistrationId);
+  setDrawerActionAvailability(item);
+}
+
+function resolveAssetHref(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  if (normalized.startsWith("/uploads/")) return normalized;
+  if (/^https?:\/\//i.test(normalized)) return normalized;
+  return "";
 }
 
 function trimAssetLabel(value) {
@@ -624,20 +874,59 @@ function trimAssetLabel(value) {
   return segments[segments.length - 1] || String(value);
 }
 
+function buildAddressSummary(item) {
+  return [
+    item.alamat,
+    item.rtRw,
+    item.kelDesa,
+    item.kecamatan,
+    item.kabupaten,
+  ].filter(Boolean).join(", ");
+}
+
+function findRegistrationById(registrationId) {
+  return [...summaryItems, ...currentItems].find((item) => item.registrationId === registrationId) || null;
+}
+
+function mergeRegistrationRecord(partial) {
+  const applyUpdate = (items) => items.map((item) => (
+    item.registrationId === partial.registrationId ? { ...item, ...partial } : item
+  ));
+
+  currentItems = applyUpdate(currentItems);
+  summaryItems = applyUpdate(summaryItems);
+}
+
 function exportToExcel() {
   if (activeTab === "summary-registrations") {
     exportSummaryToExcel();
     return;
   }
 
-  if (activeTab === "detail-submissions") {
-    exportSubmissionRawToExcel();
+  if (activeTab === "detail-registrations") {
+    exportRegistrationsToExcel();
     return;
   }
 
-  if (!currentItems.length) return;
+  if (activeTab === "summary-submissions") {
+    exportSubmissionSummaryToExcel();
+    return;
+  }
 
-  const rowsHtml = currentItems.map((item) => {
+  if (activeTab === "breakdown-submissions") {
+    exportSubmissionBreakdownToExcel();
+    return;
+  }
+
+  if (activeTab === "detail-submissions") {
+    exportSubmissionRawToExcel();
+  }
+}
+
+function exportRegistrationsToExcel() {
+  if (!visibleRegistrationItems.length) return;
+
+  const rowsHtml = visibleRegistrationItems.map((item) => {
     const values = [
       item.status || "",
       item.registrationId || "",
@@ -821,6 +1110,82 @@ function exportSummaryToExcel() {
   downloadExcelBlob(html, "tic-summary-area-kerja");
 }
 
+function exportSubmissionSummaryToExcel() {
+  const { rows, totals } = buildSubmissionSummary(uploadItems);
+  if (!rows.length) return;
+
+  const rowsHtml = rows.map((row) => {
+    const values = [row.kabupaten, row.target, row.achv, row.toBeAchv];
+    return `<tr>${values.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`;
+  }).join("");
+
+  const html = `
+    <html>
+      <head>
+        <meta charset="utf-8" />
+      </head>
+      <body>
+        <table border="1">
+          <thead>
+            <tr>
+              <th>Kabupaten</th>
+              <th>Target</th>
+              <th>Achv</th>
+              <th>To be Achv</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+            <tr>
+              <td><strong>Total</strong></td>
+              <td><strong>${totals.target}</strong></td>
+              <td><strong>${totals.achv}</strong></td>
+              <td><strong>${totals.toBeAchv}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `.trim();
+
+  downloadExcelBlob(html, "tic-upload-summary");
+}
+
+function exportSubmissionBreakdownToExcel() {
+  const rows = filterSubmissionBreakdownRows(breakdownRows);
+  if (!rows.length) return;
+
+  const locationColumns = Array.isArray(currentMasterData?.columns) ? currentMasterData.columns : [];
+  const headerColumns = [...locationColumns, "Status"];
+  const rowsHtml = rows.map((row) => {
+    const values = [
+      ...locationColumns.map((column) => row.values[column] || ""),
+      row.status || "",
+    ];
+    return `<tr>${values.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`;
+  }).join("");
+
+  const html = `
+    <html>
+      <head>
+        <meta charset="utf-8" />
+      </head>
+      <body>
+        <table border="1">
+          <thead>
+            <tr>
+              ${headerColumns.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </body>
+    </html>
+  `.trim();
+
+  downloadExcelBlob(html, "tic-upload-breakdown");
+}
+
 function downloadExcelBlob(html, filePrefix) {
   const blob = new Blob(["\ufeff", html], {
     type: "application/vnd.ms-excel;charset=utf-8",
@@ -881,7 +1246,7 @@ function buildAreaSummary(items) {
     }
   });
 
-  const rows = Array.from(areaMap.values()).sort((a, b) => a.areaKerja.localeCompare(b.areaKerja, "id"));
+  const rows = Array.from(areaMap.values()).sort((left, right) => left.areaKerja.localeCompare(right.areaKerja, "id"));
   return { rows, totals };
 }
 
@@ -918,12 +1283,8 @@ function buildSubmissionSummary(items) {
     achievementMap.get(kabupaten).add(schoolName);
   });
 
-  const allKabupaten = Array.from(
-    new Set([
-      ...targetMap.keys(),
-      ...achievementMap.keys(),
-    ]),
-  ).sort((a, b) => a.localeCompare(b, "id"));
+  const allKabupaten = Array.from(new Set([...targetMap.keys(), ...achievementMap.keys()]))
+    .sort((left, right) => left.localeCompare(right, "id"));
 
   const totals = {
     target: 0,
@@ -1002,28 +1363,26 @@ function getMasterColumnHints() {
 
 function populateBreakdownKabupatenOptions(rows) {
   const { kabupatenColumn } = getMasterColumnHints();
-  const currentValue = breakdownKabupatenFilter.value;
-  const kabupatenValues = Array.from(
-    new Set(
-      rows
-        .map((row) => row.values[kabupatenColumn] || "Belum diisi")
-        .filter(Boolean),
-    ),
-  ).sort((a, b) => a.localeCompare(b, "id"));
+  const currentValue = ui.breakdownKabupatenFilter.value;
+  const kabupatenValues = Array.from(new Set(
+    rows
+      .map((row) => row.values[kabupatenColumn] || "Belum diisi")
+      .filter(Boolean),
+  )).sort((left, right) => left.localeCompare(right, "id"));
 
-  breakdownKabupatenFilter.innerHTML = [
+  ui.breakdownKabupatenFilter.innerHTML = [
     '<option value="">Semua Kabupaten</option>',
     ...kabupatenValues.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`),
   ].join("");
 
-  breakdownKabupatenFilter.value = kabupatenValues.includes(currentValue) ? currentValue : "";
+  ui.breakdownKabupatenFilter.value = kabupatenValues.includes(currentValue) ? currentValue : "";
 }
 
 function filterSubmissionBreakdownRows(rows) {
   const { kabupatenColumn } = getMasterColumnHints();
-  const selectedKabupaten = breakdownKabupatenFilter.value.trim();
-  const selectedStatus = breakdownStatusFilter.value.trim().toUpperCase();
-  const searchTerm = normalizeSearchValue(breakdownSearchInput.value);
+  const selectedKabupaten = ui.breakdownKabupatenFilter.value.trim();
+  const selectedStatus = ui.breakdownStatusFilter.value.trim().toUpperCase();
+  const searchTerm = normalizeSearchValue(ui.breakdownSearchInput.value);
 
   return rows.filter((row) => {
     const kabupatenValue = String(row.values[kabupatenColumn] || "Belum diisi").trim();
@@ -1039,10 +1398,7 @@ function filterSubmissionBreakdownRows(rows) {
       return true;
     }
 
-    const haystack = normalizeSearchValue(
-      [...Object.values(row.values), row.status]
-        .join(" "),
-    );
+    const haystack = normalizeSearchValue([...Object.values(row.values), row.status].join(" "));
     return haystack.includes(searchTerm);
   });
 }
@@ -1152,21 +1508,68 @@ function createStatusCell(status) {
 }
 
 function normalizeSearchValue(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase();
+  return String(value || "").trim().toLowerCase();
+}
+
+function getVisibleRegistrationItems() {
+  const searchTerm = normalizeSearchValue(ui.registrationSearchInput.value);
+  if (!searchTerm) {
+    return [...currentItems];
+  }
+
+  return currentItems.filter((item) => {
+    const haystack = normalizeSearchValue([
+      item.registrationId,
+      item.uid,
+      item.gmail,
+      item.nama,
+      item.displayName,
+      item.areaKerja,
+      item.kabupaten,
+      item.nik,
+    ].join(" "));
+    return haystack.includes(searchTerm);
+  });
 }
 
 function getSubmissionRawItems(items) {
   return [...items].sort((left, right) =>
-    String(left.uploadedAt || left.createdAt || "").localeCompare(
-      String(right.uploadedAt || right.createdAt || ""),
+    String(right.uploadedAt || right.createdAt || "").localeCompare(
+      String(left.uploadedAt || left.createdAt || ""),
     ),
   );
 }
 
 function setActiveTab(tab) {
   activeTab = tab;
+
+  const tabs = {
+    "summary-registrations": {
+      label: "Summary Registrasi",
+      exportLabel: "Export Summary Registrasi",
+    },
+    "detail-registrations": {
+      label: "Review Registrasi",
+      exportLabel: "Export Registrasi",
+    },
+    "summary-submissions": {
+      label: "Summary Upload",
+      exportLabel: "Export Summary Upload",
+    },
+    "breakdown-submissions": {
+      label: "Breakdown Sekolah",
+      exportLabel: "Export Breakdown Sekolah",
+    },
+    "detail-submissions": {
+      label: "Raw Upload",
+      exportLabel: "Export Raw Upload",
+    },
+    "master-data": {
+      label: "Master Data",
+      exportLabel: "Export",
+    },
+  };
+
   const showRegistrationSummary = tab === "summary-registrations";
   const showRegistrationDetail = tab === "detail-registrations";
   const showUploadSummary = tab === "summary-submissions";
@@ -1174,45 +1577,83 @@ function setActiveTab(tab) {
   const showUploadRaw = tab === "detail-submissions";
   const showMasterPanel = tab === "master-data";
 
-  summaryTabButton.setAttribute("aria-selected", showRegistrationSummary ? "true" : "false");
-  detailTabButton.setAttribute("aria-selected", showRegistrationDetail ? "true" : "false");
-  uploadSummaryTabButton.setAttribute("aria-selected", showUploadSummary ? "true" : "false");
-  uploadBreakdownTabButton.setAttribute("aria-selected", showUploadBreakdown ? "true" : "false");
-  uploadRawTabButton.setAttribute("aria-selected", showUploadRaw ? "true" : "false");
-  masterTabButton.setAttribute("aria-selected", showMasterPanel ? "true" : "false");
+  ui.summaryTabButton.setAttribute("aria-selected", showRegistrationSummary ? "true" : "false");
+  ui.detailTabButton.setAttribute("aria-selected", showRegistrationDetail ? "true" : "false");
+  ui.uploadSummaryTabButton.setAttribute("aria-selected", showUploadSummary ? "true" : "false");
+  ui.uploadBreakdownTabButton.setAttribute("aria-selected", showUploadBreakdown ? "true" : "false");
+  ui.uploadRawTabButton.setAttribute("aria-selected", showUploadRaw ? "true" : "false");
+  ui.masterTabButton.setAttribute("aria-selected", showMasterPanel ? "true" : "false");
 
-  detailToolbar.classList.toggle("hidden", !(showRegistrationDetail || showUploadRaw));
+  ui.detailToolbar.classList.toggle("hidden", showMasterPanel);
   statusFilterField.classList.toggle("hidden", !showRegistrationDetail);
-  summaryPanel.classList.toggle("hidden", !showRegistrationSummary);
-  detailPanel.classList.toggle("hidden", !showRegistrationDetail);
-  uploadSummaryPanel.classList.toggle("hidden", !showUploadSummary);
-  uploadBreakdownToolbar.classList.toggle("hidden", !showUploadBreakdown);
-  uploadBreakdownPanel.classList.toggle("hidden", !showUploadBreakdown);
-  uploadRawPanel.classList.toggle("hidden", !showUploadRaw);
-  masterPanel.classList.toggle("hidden", !showMasterPanel);
-  if (showRegistrationDetail) {
-    summaryText.textContent = statusFilter.value
-      ? `${currentItems.length} data sesuai filter, ${summaryItems.length} total registrasi`
-      : `${summaryItems.length} total data registrasi`;
-  }
-  if (showUploadRaw) {
-    summaryText.textContent = uploadItems.length
-      ? `${uploadItems.length} total raw data upload`
-      : "Belum ada raw data upload yang masuk.";
-  }
+  registrationSearchField.classList.toggle("hidden", !showRegistrationDetail);
+  ui.summaryPanel.classList.toggle("hidden", !showRegistrationSummary);
+  ui.detailPanel.classList.toggle("hidden", !showRegistrationDetail);
+  ui.uploadSummaryPanel.classList.toggle("hidden", !showUploadSummary);
+  ui.uploadBreakdownToolbar.classList.toggle("hidden", !showUploadBreakdown);
+  ui.uploadBreakdownPanel.classList.toggle("hidden", !showUploadBreakdown);
+  ui.uploadRawPanel.classList.toggle("hidden", !showUploadRaw);
+  ui.masterPanel.classList.toggle("hidden", !showMasterPanel);
+
+  ui.heroViewName.textContent = tabs[tab].label;
+  ui.metricActiveView.textContent = tabs[tab].label;
+  ui.exportButton.textContent = tabs[tab].exportLabel;
+
+  refreshToolbarSummary();
   updateExportButtonState();
 }
 
+function updateDashboardMetrics() {
+  const registrationSummary = buildAreaSummary(summaryItems);
+  const uploadSummary = buildSubmissionSummary(uploadItems);
+  const masterRows = Array.isArray(currentMasterData?.rows) ? currentMasterData.rows.length : 0;
+  const masterColumns = Array.isArray(currentMasterData?.columns) ? currentMasterData.columns.length : 0;
+
+  ui.heroRegistrationsCount.textContent = formatCompactNumber(registrationSummary.totals.total);
+  ui.heroUploadsCount.textContent = formatCompactNumber(uploadItems.length);
+  ui.heroMasterRowsCount.textContent = formatCompactNumber(masterRows);
+
+  ui.metricRegistrationsTotal.textContent = formatCompactNumber(registrationSummary.totals.total);
+  ui.metricRegistrationsPending.textContent = formatCompactNumber(registrationSummary.totals.pending);
+  ui.metricRegistrationsApproved.textContent = formatCompactNumber(registrationSummary.totals.approved);
+  ui.metricRegistrationsAttention.textContent = formatCompactNumber(
+    registrationSummary.totals.rejected + registrationSummary.totals.suspended,
+  );
+  ui.metricRegistrationAreas.textContent = registrationSummary.rows.length
+    ? `${registrationSummary.rows.length} area kerja aktif pada data registrasi.`
+    : "Belum ada area kerja yang masuk.";
+
+  ui.metricUploadsTotal.textContent = formatCompactNumber(uploadItems.length);
+  ui.metricUploadsSchools.textContent = formatCompactNumber(uploadSummary.totals.achv);
+  ui.metricUploadsPendingTarget.textContent = formatCompactNumber(uploadSummary.totals.toBeAchv);
+  ui.metricUploadsKabupaten.textContent = formatCompactNumber(uploadSummary.rows.length);
+  ui.metricUploadsCoverage.textContent = uploadSummary.rows.length
+    ? `${uploadSummary.totals.achv} sekolah achieved dari ${uploadSummary.totals.target} target master.`
+    : "Target upload akan muncul setelah master data aktif.";
+
+  ui.metricMasterRows.textContent = formatCompactNumber(masterRows);
+  ui.metricMasterColumns.textContent = formatCompactNumber(masterColumns);
+  ui.metricMasterUpdated.textContent = currentMasterData?.updatedAt ? formatDate(currentMasterData.updatedAt) : "-";
+  ui.metricMasterDataset.textContent = currentMasterData?.title
+    ? `${currentMasterData.title} dengan ${masterColumns} level cascading aktif.`
+    : "Belum ada dataset master yang aktif.";
+}
+
+function touchLastSync() {
+  lastSyncAt = new Date().toISOString();
+  ui.heroLastSync.textContent = `Sinkron terakhir ${formatDate(lastSyncAt)}`;
+}
+
 async function uploadMasterDataExcel() {
-  const file = masterFileInput.files?.[0];
+  const file = ui.masterFileInput.files?.[0];
   if (!file) {
     setMasterUploadState("Pilih file Excel terlebih dahulu.", "error");
     return;
   }
 
   hideError();
-  masterUploadButton.disabled = true;
-  masterRefreshButton.disabled = true;
+  ui.masterUploadButton.disabled = true;
+  ui.masterRefreshButton.disabled = true;
   setMasterUploadState(`Mengupload ${file.name}...`, "saving");
 
   try {
@@ -1235,16 +1676,16 @@ async function uploadMasterDataExcel() {
 
     setMasterUploadState(
       `Upload berhasil. ${payload.columns.length} kolom dan ${payload.rowCount} baris aktif terbaca.`,
-      "saved"
+      "saved",
     );
-    masterFileInput.value = "";
+    ui.masterFileInput.value = "";
     await loadMasterDataInfo();
   } catch (error) {
     setMasterUploadState(error.message || "Upload Excel gagal.", "error");
     showError(error.message || "Upload Excel gagal.");
   } finally {
-    masterUploadButton.disabled = false;
-    masterRefreshButton.disabled = false;
+    ui.masterUploadButton.disabled = false;
+    ui.masterRefreshButton.disabled = false;
   }
 }
 
@@ -1273,25 +1714,48 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-statusFilter.addEventListener("change", loadRegistrations);
-exportButton.addEventListener("click", exportToExcel);
-summaryTabButton.addEventListener("click", () => setActiveTab("summary-registrations"));
-detailTabButton.addEventListener("click", () => setActiveTab("detail-registrations"));
-uploadSummaryTabButton.addEventListener("click", () => setActiveTab("summary-submissions"));
-uploadBreakdownTabButton.addEventListener("click", () => setActiveTab("breakdown-submissions"));
-uploadRawTabButton.addEventListener("click", () => setActiveTab("detail-submissions"));
-masterTabButton.addEventListener("click", () => setActiveTab("master-data"));
-breakdownKabupatenFilter.addEventListener("change", () => renderSubmissionBreakdown(breakdownRows));
-breakdownStatusFilter.addEventListener("change", () => renderSubmissionBreakdown(breakdownRows));
-breakdownSearchInput.addEventListener("input", () => renderSubmissionBreakdown(breakdownRows));
-masterUploadButton.addEventListener("click", uploadMasterDataExcel);
-masterRefreshButton.addEventListener("click", loadMasterDataInfo);
-masterFileInput.addEventListener("change", () => {
-  const file = masterFileInput.files?.[0];
+ui.statusFilter.addEventListener("change", loadRegistrations);
+ui.registrationSearchInput.addEventListener("input", () => {
+  renderRows();
+  refreshToolbarSummary();
+});
+ui.exportButton.addEventListener("click", exportToExcel);
+ui.summaryTabButton.addEventListener("click", () => setActiveTab("summary-registrations"));
+ui.detailTabButton.addEventListener("click", () => setActiveTab("detail-registrations"));
+ui.uploadSummaryTabButton.addEventListener("click", () => setActiveTab("summary-submissions"));
+ui.uploadBreakdownTabButton.addEventListener("click", () => setActiveTab("breakdown-submissions"));
+ui.uploadRawTabButton.addEventListener("click", () => setActiveTab("detail-submissions"));
+ui.masterTabButton.addEventListener("click", () => setActiveTab("master-data"));
+ui.breakdownKabupatenFilter.addEventListener("change", () => renderSubmissionBreakdown(breakdownRows));
+ui.breakdownStatusFilter.addEventListener("change", () => renderSubmissionBreakdown(breakdownRows));
+ui.breakdownSearchInput.addEventListener("input", () => renderSubmissionBreakdown(breakdownRows));
+ui.masterUploadButton.addEventListener("click", uploadMasterDataExcel);
+ui.masterRefreshButton.addEventListener("click", loadMasterDataInfo);
+ui.masterFileInput.addEventListener("change", () => {
+  const file = ui.masterFileInput.files?.[0];
   setMasterUploadState(file ? `Siap upload: ${file.name}` : "Belum ada file dipilih.", file ? "dirty" : "");
 });
+ui.detailDrawerCloseButton.addEventListener("click", closeRegistrationDrawer);
+ui.detailDrawerBackdrop.addEventListener("click", closeRegistrationDrawer);
+ui.drawerNoteInput.addEventListener("input", () => setDrawerNoteState("Belum disimpan", "dirty"));
+ui.drawerNoteInput.addEventListener("keydown", async (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    event.preventDefault();
+    await saveSelectedRegistrationNote();
+  }
+});
+ui.drawerNoteSaveButton.addEventListener("click", saveSelectedRegistrationNote);
+ui.drawerApproveButton.addEventListener("click", () => updateSelectedRegistrationStatus("approve"));
+ui.drawerRejectButton.addEventListener("click", () => updateSelectedRegistrationStatus("reject"));
+ui.drawerSuspendButton.addEventListener("click", () => updateSelectedRegistrationStatus("suspend"));
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !ui.detailDrawer.classList.contains("hidden")) {
+    closeRegistrationDrawer();
+  }
+});
 
+setDrawerActionAvailability(null);
+setActiveTab(activeTab);
 loadMasterDataInfo();
 loadRegistrations();
 loadSubmissions();
-setActiveTab(activeTab);
