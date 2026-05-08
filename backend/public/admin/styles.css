@@ -73,9 +73,9 @@ a {
 .hero {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+  grid-template-columns: minmax(0, 1.72fr) minmax(220px, 0.68fr);
   align-items: start;
-  gap: 20px;
+  gap: 18px;
   padding: 28px 30px;
   border-radius: var(--radius-xl);
   background:
@@ -160,15 +160,17 @@ a {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 10px;
+  width: min(100%, 360px);
+  gap: 8px;
   align-content: start;
+  justify-self: end;
 }
 
 .hero-stat {
   display: grid;
-  gap: 6px;
-  padding: 14px 20px 12px;
-  border-radius: 24px;
+  gap: 5px;
+  padding: 12px 18px 10px;
+  border-radius: 22px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(12px);
@@ -184,13 +186,14 @@ a {
 }
 
 .hero-stat strong {
-  font-size: clamp(1.75rem, 2.7vw, 2.35rem);
+  font-size: clamp(1.6rem, 2.35vw, 2.05rem);
   line-height: 1;
 }
 
 .hero-stat small {
   color: rgba(255, 255, 255, 0.74);
-  line-height: 1.32;
+  line-height: 1.24;
+  font-size: 13px;
 }
 
 .insight-grid {
