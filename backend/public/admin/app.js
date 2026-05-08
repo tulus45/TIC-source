@@ -62,8 +62,11 @@ const ui = {
   metricUploadsPendingTarget: document.getElementById("metricUploadsPendingTarget"),
   metricUploadsKabupaten: document.getElementById("metricUploadsKabupaten"),
   detailDrawerBackdrop: document.getElementById("detailDrawerBackdrop"),
+  detailPreviewStage: document.getElementById("detailPreviewStage"),
   detailDrawer: document.getElementById("detailDrawer"),
   detailDrawerCloseButton: document.getElementById("detailDrawerCloseButton"),
+  previewStageMeta: document.getElementById("previewStageMeta"),
+  previewStageAssets: document.getElementById("previewStageAssets"),
   drawerTitle: document.getElementById("drawerTitle"),
   drawerMeta: document.getElementById("drawerMeta"),
   drawerStatusPill: document.getElementById("drawerStatusPill"),
@@ -699,16 +702,20 @@ function summarizeRegistrationAssets(item) {
 function openRegistrationDrawer(item) {
   selectedRegistrationId = item.registrationId;
   fillRegistrationDrawer(item);
+  ui.detailPreviewStage.classList.remove("hidden");
   ui.detailDrawer.classList.remove("hidden");
   ui.detailDrawerBackdrop.classList.remove("hidden");
+  ui.detailPreviewStage.setAttribute("aria-hidden", "false");
   ui.detailDrawer.setAttribute("aria-hidden", "false");
   document.body.classList.add("drawer-open");
 }
 
 function closeRegistrationDrawer() {
   selectedRegistrationId = null;
+  ui.detailPreviewStage.classList.add("hidden");
   ui.detailDrawer.classList.add("hidden");
   ui.detailDrawerBackdrop.classList.add("hidden");
+  ui.detailPreviewStage.setAttribute("aria-hidden", "true");
   ui.detailDrawer.setAttribute("aria-hidden", "true");
   document.body.classList.remove("drawer-open");
   setDrawerActionAvailability(null);
@@ -741,6 +748,7 @@ function fillRegistrationDrawer(item, successMessage = "") {
   ui.drawerNoteInput.value = item.adminNote || item.rejectionReason || "";
   renderDrawerFields(item);
   renderDrawerAssets(item);
+  renderPreviewStage(item);
   setDrawerActionAvailability(item);
   setDrawerNoteState(successMessage, successMessage ? "saved" : "");
 }
@@ -785,9 +793,25 @@ function renderDrawerAssets(item) {
   ui.drawerAssets.appendChild(createAssetCard("Selfie", item.selfieDriveFileId, item.selfieLocalPath));
 }
 
+function renderPreviewStage(item) {
+  ui.previewStageMeta.textContent = [
+    item.nama || item.displayName || "Tanpa nama",
+    item.areaKerja || item.kabupaten || "Area belum diisi",
+    "Klik gambar untuk membuka ukuran penuh.",
+  ].join(" • ");
+
+  ui.previewStageAssets.innerHTML = "";
+  ui.previewStageAssets.appendChild(
+    createPreviewAssetCard("Preview KTP", item.ktpDriveFileId, item.ktpLocalPath),
+  );
+  ui.previewStageAssets.appendChild(
+    createPreviewAssetCard("Preview Foto Selfie", item.selfieDriveFileId, item.selfieLocalPath),
+  );
+}
+
 function createAssetCard(label, remoteUrl, fallbackPath) {
   const href = resolveAssetHref(remoteUrl);
-  const hasPreview = Boolean(href && href.startsWith("/uploads/"));
+  const hasPreview = isPreviewableImageHref(href);
   const card = document.createElement(href ? "a" : "div");
   card.className = "asset-card";
 
@@ -829,6 +853,69 @@ function createAssetCard(label, remoteUrl, fallbackPath) {
   return card;
 }
 
+function createPreviewAssetCard(label, remoteUrl, fallbackPath) {
+  const href = resolveAssetHref(remoteUrl);
+  const hasPreview = isPreviewableImageHref(href);
+  const card = document.createElement(href ? "a" : "div");
+  card.className = "preview-asset-card";
+
+  if (href) {
+    card.href = href;
+    card.target = "_blank";
+    card.rel = "noreferrer noopener";
+  }
+
+  const media = document.createElement("div");
+  media.className = "preview-asset-card__media";
+
+  if (hasPreview) {
+    const image = document.createElement("img");
+    image.src = href;
+    image.alt = label;
+    image.loading = "lazy";
+    image.addEventListener("error", () => {
+      media.replaceChildren(createPreviewAssetPlaceholder("Preview gambar belum tersedia."));
+    });
+    media.appendChild(image);
+  } else {
+    media.appendChild(createPreviewAssetPlaceholder(
+      trimAssetLabel(fallbackPath) || "Belum ada file yang bisa dipreview.",
+    ));
+  }
+
+  const copy = document.createElement("div");
+  copy.className = "preview-asset-card__copy";
+
+  const title = document.createElement("strong");
+  title.className = "preview-asset-card__title";
+  title.textContent = label;
+
+  const status = document.createElement("span");
+  status.textContent = href
+    ? "Berkas tersedia untuk ditinjau di panel ini."
+    : "Belum ada berkas tersimpan untuk item ini.";
+
+  const hint = document.createElement("span");
+  hint.textContent = href
+    ? "Klik kartu untuk membuka file penuh."
+    : "Menunggu upload asset dari APK.";
+
+  copy.appendChild(title);
+  copy.appendChild(status);
+  copy.appendChild(hint);
+  card.appendChild(media);
+  card.appendChild(copy);
+
+  return card;
+}
+
+function createPreviewAssetPlaceholder(message) {
+  const placeholder = document.createElement("div");
+  placeholder.className = "preview-asset-card__placeholder";
+  placeholder.textContent = message;
+  return placeholder;
+}
+
 function setDrawerActionAvailability(item) {
   const hasSelection = Boolean(item);
   const status = item?.status || "";
@@ -859,6 +946,14 @@ function resolveAssetHref(value) {
   if (normalized.startsWith("/uploads/")) return normalized;
   if (/^https?:\/\//i.test(normalized)) return normalized;
   return "";
+}
+
+function isPreviewableImageHref(href) {
+  if (!href) {
+    return false;
+  }
+
+  return href.startsWith("/uploads/") || /^https?:\/\//i.test(href);
 }
 
 function trimAssetLabel(value) {
