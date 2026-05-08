@@ -74,8 +74,9 @@ a {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
-  gap: 24px;
-  padding: 34px;
+  align-items: start;
+  gap: 20px;
+  padding: 28px 30px;
   border-radius: var(--radius-xl);
   background:
     radial-gradient(circle at 82% 18%, rgba(255, 255, 255, 0.18), transparent 24%),
@@ -120,7 +121,7 @@ a {
 }
 
 .hero h1 {
-  margin: 18px 0 14px;
+  margin: 14px 0 12px;
   max-width: 760px;
   font-size: clamp(2rem, 3.4vw, 3.45rem);
   line-height: 1.08;
@@ -131,14 +132,14 @@ a {
   margin: 0;
   max-width: 760px;
   color: rgba(255, 255, 255, 0.8);
-  line-height: 1.7;
+  line-height: 1.55;
 }
 
 .hero__meta {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 22px;
+  margin-top: 18px;
 }
 
 .hero__meta-pill {
@@ -159,14 +160,14 @@ a {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 14px;
-  align-content: stretch;
+  gap: 10px;
+  align-content: start;
 }
 
 .hero-stat {
   display: grid;
-  gap: 8px;
-  padding: 18px 18px 16px;
+  gap: 6px;
+  padding: 14px 20px 12px;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -183,13 +184,13 @@ a {
 }
 
 .hero-stat strong {
-  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  font-size: clamp(1.75rem, 2.7vw, 2.35rem);
   line-height: 1;
 }
 
 .hero-stat small {
   color: rgba(255, 255, 255, 0.74);
-  line-height: 1.45;
+  line-height: 1.32;
 }
 
 .insight-grid {
