@@ -21,6 +21,7 @@ const ui = {
   summaryBody: document.getElementById("summaryBody"),
   summaryEmptyState: document.getElementById("summaryEmptyState"),
   uploadSummaryPanel: document.getElementById("uploadSummaryPanel"),
+  uploadSummaryCharts: document.getElementById("uploadSummaryCharts"),
   uploadSummaryScroll: document.getElementById("uploadSummaryScroll"),
   uploadSummaryBody: document.getElementById("uploadSummaryBody"),
   uploadSummaryEmptyState: document.getElementById("uploadSummaryEmptyState"),
@@ -369,6 +370,20 @@ function populateAreaKerjaFilterOptions(items) {
   ui.areaKerjaFilter.value = areaOptions.includes(selectedValue) ? selectedValue : "";
 }
 
+const SUBMISSION_REVIEW_SUMMARY_META = [
+  { key: "PENDING", label: "Pending", color: "#dd8c1f" },
+  { key: "APPROVED", label: "Approved", color: "#1f7a52" },
+  { key: "REJECTED", label: "Rejected", color: "#bb3f34" },
+  { key: "SUSPENDED", label: "Suspended", color: "#475569" },
+];
+
+function createEmptySubmissionReviewCounts() {
+  return SUBMISSION_REVIEW_SUMMARY_META.reduce((result, item) => {
+    result[item.key] = 0;
+    return result;
+  }, {});
+}
+
 function getSubmissionReviewStatus(item) {
   const normalized = String(item?.reviewStatus || "").trim().toUpperCase();
   return normalized || "PENDING";
@@ -537,14 +552,19 @@ function renderSubmissionRows(items) {
 
 function renderSubmissionSummary(items) {
   ui.uploadSummaryBody.innerHTML = "";
-  const { rows, totals } = buildSubmissionSummary(items);
+  const summary = buildSubmissionSummary(items);
+  const { rows, totals } = summary;
 
   if (!rows.length) {
+    ui.uploadSummaryCharts.classList.add("hidden");
+    ui.uploadSummaryCharts.innerHTML = "";
     ui.uploadSummaryScroll.classList.add("hidden");
     ui.uploadSummaryEmptyState.classList.remove("hidden");
     return;
   }
 
+  renderUploadSummaryCharts(summary);
+  ui.uploadSummaryCharts.classList.remove("hidden");
   ui.uploadSummaryScroll.classList.remove("hidden");
   ui.uploadSummaryEmptyState.classList.add("hidden");
 
@@ -555,6 +575,10 @@ function renderSubmissionSummary(items) {
       <td class="cell-nowrap cell-center">${row.target}</td>
       <td class="cell-nowrap cell-center">${row.achv}</td>
       <td class="cell-nowrap cell-center">${row.toBeAchv}</td>
+      <td class="cell-nowrap cell-center">${row.pending}</td>
+      <td class="cell-nowrap cell-center">${row.approved}</td>
+      <td class="cell-nowrap cell-center">${row.rejected}</td>
+      <td class="cell-nowrap cell-center">${row.suspended}</td>
     `;
     ui.uploadSummaryBody.appendChild(tr);
   });
@@ -566,8 +590,116 @@ function renderSubmissionSummary(items) {
     <td class="cell-nowrap cell-center cell-strong">${totals.target}</td>
     <td class="cell-nowrap cell-center cell-strong">${totals.achv}</td>
     <td class="cell-nowrap cell-center cell-strong">${totals.toBeAchv}</td>
+    <td class="cell-nowrap cell-center cell-strong">${totals.pending}</td>
+    <td class="cell-nowrap cell-center cell-strong">${totals.approved}</td>
+    <td class="cell-nowrap cell-center cell-strong">${totals.rejected}</td>
+    <td class="cell-nowrap cell-center cell-strong">${totals.suspended}</td>
   `;
   ui.uploadSummaryBody.appendChild(totalRow);
+}
+
+function renderUploadSummaryCharts(summary) {
+  const incomingSegments = [
+    { label: "Achv", value: summary.totals.achv, color: "#1f7a52" },
+    { label: "To be Achv", value: summary.totals.toBeAchv, color: "#dd8c1f" },
+  ];
+  const reviewSegments = SUBMISSION_REVIEW_SUMMARY_META.map((item) => ({
+    label: item.label,
+    value: summary.totals[item.key.toLowerCase()] || 0,
+    color: item.color,
+  }));
+
+  ui.uploadSummaryCharts.innerHTML = "";
+  ui.uploadSummaryCharts.appendChild(
+    createUploadSummaryPieCard({
+      eyebrow: "Data Masuk",
+      title: "Achv vs To be Achv",
+      centerValue: summary.totals.achv,
+      centerLabel: "sekolah tercapai",
+      segments: incomingSegments,
+    }),
+  );
+  ui.uploadSummaryCharts.appendChild(
+    createUploadSummaryPieCard({
+      eyebrow: "Status Review Data",
+      title: "Distribusi review upload",
+      centerValue: reviewSegments.reduce((total, item) => total + item.value, 0),
+      centerLabel: "total data upload",
+      segments: reviewSegments,
+    }),
+  );
+}
+
+function createUploadSummaryPieCard({ eyebrow, title, centerValue, centerLabel, segments }) {
+  const total = segments.reduce((result, item) => result + (Number(item.value) || 0), 0);
+  const card = document.createElement("article");
+  card.className = "upload-summary-card";
+
+  const header = document.createElement("div");
+  header.className = "upload-summary-card__header";
+  header.innerHTML = `
+    <p class="upload-summary-card__eyebrow">${escapeHtml(eyebrow)}</p>
+    <h3>${escapeHtml(title)}</h3>
+  `;
+
+  const body = document.createElement("div");
+  body.className = "upload-summary-card__body";
+
+  const visual = document.createElement("div");
+  visual.className = "upload-summary-pie";
+  if (!total) {
+    visual.dataset.empty = "true";
+  } else {
+    visual.style.setProperty("--pie-gradient", buildUploadSummaryPieGradient(segments));
+  }
+
+  const center = document.createElement("div");
+  center.className = "upload-summary-pie__center";
+  center.innerHTML = `
+    <strong>${escapeHtml(formatCompactNumber(centerValue))}</strong>
+    <span>${escapeHtml(centerLabel)}</span>
+  `;
+  visual.appendChild(center);
+
+  const legend = document.createElement("ul");
+  legend.className = "upload-summary-legend";
+  segments.forEach((segment) => {
+    const item = document.createElement("li");
+    const percentage = total ? Math.round((segment.value / total) * 100) : 0;
+    item.innerHTML = `
+      <span class="upload-summary-legend__swatch" style="--legend-color: ${segment.color}"></span>
+      <span class="upload-summary-legend__label">
+        <strong>${escapeHtml(segment.label)}</strong>
+        <small>${percentage}%</small>
+      </span>
+      <span class="upload-summary-legend__value">${escapeHtml(formatCompactNumber(segment.value))}</span>
+    `;
+    legend.appendChild(item);
+  });
+
+  body.appendChild(visual);
+  body.appendChild(legend);
+  card.appendChild(header);
+  card.appendChild(body);
+  return card;
+}
+
+function buildUploadSummaryPieGradient(segments) {
+  const total = segments.reduce((result, item) => result + (Number(item.value) || 0), 0);
+  if (!total) {
+    return "conic-gradient(rgba(95, 111, 130, 0.18) 0deg 360deg)";
+  }
+
+  let cursor = 0;
+  return `conic-gradient(${segments
+    .filter((item) => item.value > 0)
+    .map((item) => {
+      const start = (cursor / total) * 360;
+      cursor += item.value;
+      const end = (cursor / total) * 360;
+      return `${item.color} ${start}deg ${end}deg`;
+    })
+    .join(", ")})`;
 }
 
 function refreshSubmissionBreakdown() {
@@ -1531,7 +1663,16 @@ function exportSubmissionSummaryToExcel() {
   if (!rows.length) return;
 
   const rowsHtml = rows.map((row) => {
-    const values = [row.kabupaten, row.target, row.achv, row.toBeAchv];
+    const values = [
+      row.kabupaten,
+      row.target,
+      row.achv,
+      row.toBeAchv,
+      row.pending,
+      row.approved,
+      row.rejected,
+      row.suspended,
+    ];
     return `<tr>${values.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`;
   }).join("");
 
@@ -1548,6 +1689,10 @@ function exportSubmissionSummaryToExcel() {
               <th>Target</th>
               <th>Achv</th>
               <th>To be Achv</th>
+              <th>Pending Review</th>
+              <th>Approved Review</th>
+              <th>Rejected Review</th>
+              <th>Suspended Review</th>
             </tr>
           </thead>
           <tbody>
@@ -1557,6 +1702,10 @@ function exportSubmissionSummaryToExcel() {
               <td><strong>${totals.target}</strong></td>
               <td><strong>${totals.achv}</strong></td>
               <td><strong>${totals.toBeAchv}</strong></td>
+              <td><strong>${totals.pending}</strong></td>
+              <td><strong>${totals.approved}</strong></td>
+              <td><strong>${totals.rejected}</strong></td>
+              <td><strong>${totals.suspended}</strong></td>
             </tr>
           </tbody>
         </table>
@@ -1713,6 +1862,7 @@ function buildSubmissionSummary(items) {
   const { kabupatenColumn, schoolColumn } = getMasterColumnHints();
   const targetMap = new Map();
   const achievementMap = new Map();
+  const reviewStatusMap = new Map();
 
   const masterRows = Array.isArray(currentMasterData?.rows) ? currentMasterData.rows : [];
   const masterColumns = Array.isArray(currentMasterData?.columns) ? currentMasterData.columns : [];
@@ -1740,31 +1890,54 @@ function buildSubmissionSummary(items) {
       achievementMap.set(kabupaten, new Set());
     }
     achievementMap.get(kabupaten).add(schoolName);
+
+    if (!reviewStatusMap.has(kabupaten)) {
+      reviewStatusMap.set(kabupaten, createEmptySubmissionReviewCounts());
+    }
+    const reviewStatus = getSubmissionReviewStatus(item);
+    const normalizedReviewStatus = SUBMISSION_REVIEW_SUMMARY_META.some((meta) => meta.key === reviewStatus)
+      ? reviewStatus
+      : "PENDING";
+    const reviewCounts = reviewStatusMap.get(kabupaten);
+    reviewCounts[normalizedReviewStatus] = (reviewCounts[normalizedReviewStatus] || 0) + 1;
   });
 
-  const allKabupaten = Array.from(new Set([...targetMap.keys(), ...achievementMap.keys()]))
+  const allKabupaten = Array.from(new Set([...targetMap.keys(), ...achievementMap.keys(), ...reviewStatusMap.keys()]))
     .sort((left, right) => left.localeCompare(right, "id"));
 
   const totals = {
     target: 0,
     achv: 0,
     toBeAchv: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+    suspended: 0,
   };
 
   const rows = allKabupaten.map((kabupaten) => {
     const target = targetMap.get(kabupaten)?.size || 0;
     const achv = achievementMap.get(kabupaten)?.size || 0;
     const toBeAchv = Math.max(target - achv, 0);
+    const reviewCounts = reviewStatusMap.get(kabupaten) || createEmptySubmissionReviewCounts();
 
     totals.target += target;
     totals.achv += achv;
     totals.toBeAchv += toBeAchv;
+    totals.pending += reviewCounts.PENDING;
+    totals.approved += reviewCounts.APPROVED;
+    totals.rejected += reviewCounts.REJECTED;
+    totals.suspended += reviewCounts.SUSPENDED;
 
     return {
       kabupaten,
       target,
       achv,
       toBeAchv,
+      pending: reviewCounts.PENDING,
+      approved: reviewCounts.APPROVED,
+      rejected: reviewCounts.REJECTED,
+      suspended: reviewCounts.SUSPENDED,
     };
   });
 
