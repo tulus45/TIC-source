@@ -19,8 +19,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-private const val connectTimeoutMillis = 10_000
-private const val readTimeoutMillis = 15_000
+private const val connectTimeoutMillis = 20_000
+private const val readTimeoutMillis = 120_000
 
 open class TicBackendException(
     message: String,
@@ -321,8 +321,15 @@ object TicBackendHttpClient : TicBackendApiContract {
             }
         }
 
+        val message = when (lastConnectionError) {
+            is SocketTimeoutException ->
+                "Upload ke server memakan waktu terlalu lama dan timeout. Coba ulangi lagi. Jika backend sedang memakai Google Drive, proses upload memang bisa lebih lambat dari biasanya."
+            else ->
+                "Tidak bisa terhubung ke server registrasi. Alamat yang dicoba: ${prioritizedBaseUrls.joinToString()}. Pastikan backend online aktif, atau override `ticBackendBaseUrl` saat build kalau Anda sedang testing ke server lokal."
+        }
+
         throw TicBackendException(
-            message = "Tidak bisa terhubung ke server registrasi. Alamat yang dicoba: ${prioritizedBaseUrls.joinToString()}. Pastikan backend online aktif, atau override `ticBackendBaseUrl` saat build kalau Anda sedang testing ke server lokal.",
+            message = message,
             cause = lastConnectionError,
         )
     }
@@ -360,8 +367,15 @@ object TicBackendHttpClient : TicBackendApiContract {
             }
         }
 
+        val message = when (lastConnectionError) {
+            is SocketTimeoutException ->
+                "Request ke server memakan waktu terlalu lama dan timeout. Coba ulangi lagi. Jika backend sedang memakai Google Drive, proses ini memang bisa lebih lambat dari biasanya."
+            else ->
+                "Tidak bisa terhubung ke server registrasi. Alamat yang dicoba: ${prioritizedBaseUrls.joinToString()}. Pastikan backend online aktif, atau override `ticBackendBaseUrl` saat build kalau Anda sedang testing ke server lokal."
+        }
+
         throw TicBackendException(
-            message = "Tidak bisa terhubung ke server registrasi. Alamat yang dicoba: ${prioritizedBaseUrls.joinToString()}. Pastikan backend online aktif, atau override `ticBackendBaseUrl` saat build kalau Anda sedang testing ke server lokal.",
+            message = message,
             cause = lastConnectionError,
         )
     }
