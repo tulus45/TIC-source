@@ -425,6 +425,7 @@ let googleDriveTokenCache = {
   accessToken: "",
   expiresAt: 0,
 };
+const googleDriveFolderCache = new Map();
 
 function isGoogleDriveStorageEnabled() {
   return googleDriveConfig.enabled;
@@ -537,6 +538,12 @@ async function getGoogleDriveAccessToken() {
 
 function createGoogleDriveProxyUrl(fileId, fileName = "file") {
   return `/uploads/google-drive/${encodeURIComponent(fileId)}/${encodeURIComponent(fileName)}`;
+}
+
+function escapeGoogleDriveQueryValue(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'");
 }
 
 async function uploadBufferToGoogleDrive({ buffer, fileName, mimeType, parentFolderId }) {
@@ -668,6 +675,109 @@ async function fetchGoogleDriveMetadata(fileId, fields = "id,name,mimeType,drive
   }
 
   return payload;
+}
+
+async function listGoogleDriveFiles({
+  query,
+  fields = "files(id,name,mimeType,parents,driveId)",
+  pageSize = 10,
+}) {
+  ensureGoogleDriveConfig();
+
+  const token = await getGoogleDriveAccessToken();
+  const listUrl = new URL(googleDriveConfig.fileBaseUrl);
+  listUrl.searchParams.set("supportsAllDrives", "true");
+  listUrl.searchParams.set("includeItemsFromAllDrives", "true");
+  listUrl.searchParams.set("corpora", "allDrives");
+  listUrl.searchParams.set("spaces", "drive");
+  listUrl.searchParams.set("pageSize", String(pageSize));
+  listUrl.searchParams.set("fields", fields);
+  listUrl.searchParams.set("q", query);
+
+  const response = await fetch(listUrl, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const payload = await parseJsonResponseSafe(response);
+  if (!response.ok) {
+    throw new Error(
+      `Gagal mencari file/folder Google Drive: ${payload.error?.message || payload.raw || response.status}`,
+    );
+  }
+
+  return Array.isArray(payload.files) ? payload.files : [];
+}
+
+async function createGoogleDriveFolder({ name, parentFolderId }) {
+  ensureGoogleDriveConfig();
+
+  const token = await getGoogleDriveAccessToken();
+  const createUrl = new URL(googleDriveConfig.fileBaseUrl);
+  createUrl.searchParams.set("supportsAllDrives", "true");
+  createUrl.searchParams.set("fields", "id,name,mimeType,parents,driveId");
+
+  const response = await fetch(createUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json; charset=UTF-8",
+    },
+    body: JSON.stringify({
+      name,
+      mimeType: "application/vnd.google-apps.folder",
+      parents: [parentFolderId],
+    }),
+  });
+
+  const payload = await parseJsonResponseSafe(response);
+  if (!response.ok || !normalizeString(payload.id)) {
+    throw new Error(
+      `Gagal membuat folder Google Drive: ${payload.error?.message || payload.raw || response.status}`,
+    );
+  }
+
+  return payload;
+}
+
+function normalizeGoogleDriveFolderName(value, fallback = "Tanpa Nama") {
+  const normalized = normalizeString(value)
+    .replace(/[\\/]/g, "-")
+    .replace(/[\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized || fallback;
+}
+
+async function ensureGoogleDriveChildFolder(parentFolderId, folderName) {
+  const normalizedParentId = normalizeString(parentFolderId);
+  const normalizedFolderName = normalizeGoogleDriveFolderName(folderName);
+  const cacheKey = `${normalizedParentId}::${normalizedFolderName}`;
+  const cachedFolderId = googleDriveFolderCache.get(cacheKey);
+  if (cachedFolderId) {
+    return cachedFolderId;
+  }
+
+  const query = [
+    `'${escapeGoogleDriveQueryValue(normalizedParentId)}' in parents`,
+    "mimeType = 'application/vnd.google-apps.folder'",
+    `name = '${escapeGoogleDriveQueryValue(normalizedFolderName)}'`,
+    "trashed = false",
+  ].join(" and ");
+
+  const [existingFolder] = await listGoogleDriveFiles({ query, pageSize: 1 });
+  if (normalizeString(existingFolder?.id)) {
+    googleDriveFolderCache.set(cacheKey, existingFolder.id);
+    return existingFolder.id;
+  }
+
+  const createdFolder = await createGoogleDriveFolder({
+    name: normalizedFolderName,
+    parentFolderId: normalizedParentId,
+  });
+  googleDriveFolderCache.set(cacheKey, createdFolder.id);
+  return createdFolder.id;
 }
 
 function extractGoogleDriveFileIdFromProxyUrl(value) {
@@ -1044,6 +1154,77 @@ function sanitizePathSegment(value, fallback = "item") {
   return normalized || fallback;
 }
 
+function parseSubmissionAnswersPayload(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+
+  const normalized = normalizeString(value);
+  if (!normalized) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(normalized);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function getSubmissionSelectedLocation(answersPayload) {
+  const selectedLocation = answersPayload?.selectedLocation;
+  return selectedLocation && typeof selectedLocation === "object" && !Array.isArray(selectedLocation)
+    ? selectedLocation
+    : {};
+}
+
+function resolveSubmissionKabupatenName({ answersPayload, matchedRegistration }) {
+  const selectedLocation = getSubmissionSelectedLocation(answersPayload);
+  const matchedKabupaten = normalizeString(
+    Object.entries(selectedLocation).find(([column]) => /kab/i.test(normalizeString(column)))?.[1],
+  );
+
+  if (matchedKabupaten) {
+    return matchedKabupaten;
+  }
+
+  return normalizeString(matchedRegistration?.kabupaten);
+}
+
+async function resolveSubmissionGoogleDriveFolder({
+  uid,
+  gmail,
+  formName,
+  answersJson,
+  registrations,
+}) {
+  const rootFolderId = getGoogleDriveFolderId("submission");
+  const answersPayload = parseSubmissionAnswersPayload(answersJson);
+  const matchedRegistration = findRegistrationForSubmission(registrations, { uid, gmail });
+  const locationValues = Object.values(getSubmissionSelectedLocation(answersPayload)).filter(Boolean);
+  const fallbackSchoolName = locationValues.length ? String(locationValues[locationValues.length - 1]) : "";
+  const kabupatenName = normalizeGoogleDriveFolderName(
+    resolveSubmissionKabupatenName({ answersPayload, matchedRegistration }),
+    "Kabupaten Belum Diisi",
+  );
+  const schoolName = normalizeGoogleDriveFolderName(
+    normalizeString(formName)
+      || fallbackSchoolName
+      || "",
+    "Sekolah Belum Diisi",
+  );
+
+  const kabupatenFolderId = await ensureGoogleDriveChildFolder(rootFolderId, kabupatenName);
+  const schoolFolderId = await ensureGoogleDriveChildFolder(kabupatenFolderId, schoolName);
+
+  return {
+    folderId: schoolFolderId,
+    kabupatenName,
+    schoolName,
+  };
+}
+
 async function deleteSubmissionStoredFiles(record) {
   const driveFileIds = Array.from(new Set(
     (Array.isArray(record?.files) ? record.files : [])
@@ -1066,7 +1247,7 @@ async function deleteSubmissionStoredFiles(record) {
   }
 }
 
-async function storeSubmissionFiles(uid, submissionId, files) {
+async function storeSubmissionFiles(uid, submissionId, files, googleDriveParentFolderId = "") {
   if (!Array.isArray(files) || !files.length) {
     return [];
   }
@@ -1099,7 +1280,7 @@ async function storeSubmissionFiles(uid, submissionId, files) {
           buffer: Buffer.from(base64Data, "base64"),
           fileName: storedFileName,
           mimeType: normalizeString(file.mimeType) || "image/jpeg",
-          parentFolderId: getGoogleDriveFolderId("submission"),
+          parentFolderId: normalizeString(googleDriveParentFolderId) || getGoogleDriveFolderId("submission"),
         });
         fileUrl = createGoogleDriveProxyUrl(uploadResult.id, uploadResult.name);
       } else {
@@ -1174,10 +1355,20 @@ function findRegistration(items, searchParams) {
 async function buildSubmissionRecord(body) {
   const now = new Date().toISOString();
   const registrations = await readRegistrations();
+  const googleDriveFolder = isGoogleDriveStorageEnabled()
+    ? await resolveSubmissionGoogleDriveFolder({
+      uid: normalizeString(body.uid),
+      gmail: normalizeString(body.gmail),
+      formName: normalizeString(body.formName),
+      answersJson: body.answersJson,
+      registrations,
+    })
+    : null;
   const files = await storeSubmissionFiles(
     normalizeString(body.uid),
     normalizeString(body.submissionId),
     Array.isArray(body.files) ? body.files : [],
+    googleDriveFolder?.folderId || "",
   );
 
   return normalizeSubmissionIdentity({
@@ -1192,7 +1383,7 @@ async function buildSubmissionRecord(body) {
     gpsLng: typeof body.gpsLng === "number" ? body.gpsLng : null,
     gpsAccuracy: typeof body.gpsAccuracy === "number" ? body.gpsAccuracy : null,
     driveFolderId: isGoogleDriveStorageEnabled()
-      ? getGoogleDriveFolderId("submission")
+      ? googleDriveFolder?.folderId || getGoogleDriveFolderId("submission")
       : normalizeString(body.driveFolderId) || null,
     status: "UPLOADED",
     reviewStatus: "PENDING",
