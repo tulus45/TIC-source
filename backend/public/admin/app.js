@@ -371,10 +371,10 @@ function populateAreaKerjaFilterOptions(items) {
 }
 
 const SUBMISSION_REVIEW_SUMMARY_META = [
-  { key: "PENDING", label: "Pending", color: "#dd8c1f" },
   { key: "APPROVED", label: "Approved", color: "#1f7a52" },
-  { key: "REJECTED", label: "Rejected", color: "#bb3f34" },
+  { key: "PENDING", label: "Pending", color: "#dd8c1f" },
   { key: "SUSPENDED", label: "Suspended", color: "#475569" },
+  { key: "REJECTED", label: "Rejected", color: "#bb3f34" },
 ];
 
 function createEmptySubmissionReviewCounts() {
@@ -575,10 +575,10 @@ function renderSubmissionSummary(items) {
       <td class="cell-nowrap cell-center">${row.target}</td>
       <td class="cell-nowrap cell-center">${row.achv}</td>
       <td class="cell-nowrap cell-center">${row.toBeAchv}</td>
+      <td class="cell-nowrap cell-center upload-summary-divider-left">${row.approved}</td>
       <td class="cell-nowrap cell-center">${row.pending}</td>
-      <td class="cell-nowrap cell-center">${row.approved}</td>
-      <td class="cell-nowrap cell-center">${row.rejected}</td>
       <td class="cell-nowrap cell-center">${row.suspended}</td>
+      <td class="cell-nowrap cell-center">${row.rejected}</td>
     `;
     ui.uploadSummaryBody.appendChild(tr);
   });
@@ -590,10 +590,10 @@ function renderSubmissionSummary(items) {
     <td class="cell-nowrap cell-center cell-strong">${totals.target}</td>
     <td class="cell-nowrap cell-center cell-strong">${totals.achv}</td>
     <td class="cell-nowrap cell-center cell-strong">${totals.toBeAchv}</td>
+    <td class="cell-nowrap cell-center cell-strong upload-summary-divider-left">${totals.approved}</td>
     <td class="cell-nowrap cell-center cell-strong">${totals.pending}</td>
-    <td class="cell-nowrap cell-center cell-strong">${totals.approved}</td>
-    <td class="cell-nowrap cell-center cell-strong">${totals.rejected}</td>
     <td class="cell-nowrap cell-center cell-strong">${totals.suspended}</td>
+    <td class="cell-nowrap cell-center cell-strong">${totals.rejected}</td>
   `;
   ui.uploadSummaryBody.appendChild(totalRow);
 }
@@ -1668,10 +1668,10 @@ function exportSubmissionSummaryToExcel() {
       row.target,
       row.achv,
       row.toBeAchv,
-      row.pending,
       row.approved,
-      row.rejected,
+      row.pending,
       row.suspended,
+      row.rejected,
     ];
     return `<tr>${values.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`;
   }).join("");
@@ -1689,10 +1689,10 @@ function exportSubmissionSummaryToExcel() {
               <th>Target</th>
               <th>Achv</th>
               <th>To be Achv</th>
-              <th>Pending Review</th>
               <th>Approved Review</th>
-              <th>Rejected Review</th>
+              <th>Pending Review</th>
               <th>Suspended Review</th>
+              <th>Rejected Review</th>
             </tr>
           </thead>
           <tbody>
@@ -1702,10 +1702,10 @@ function exportSubmissionSummaryToExcel() {
               <td><strong>${totals.target}</strong></td>
               <td><strong>${totals.achv}</strong></td>
               <td><strong>${totals.toBeAchv}</strong></td>
-              <td><strong>${totals.pending}</strong></td>
               <td><strong>${totals.approved}</strong></td>
-              <td><strong>${totals.rejected}</strong></td>
+              <td><strong>${totals.pending}</strong></td>
               <td><strong>${totals.suspended}</strong></td>
+              <td><strong>${totals.rejected}</strong></td>
             </tr>
           </tbody>
         </table>

@@ -720,6 +720,10 @@ a {
   min-width: 1220px;
 }
 
+.upload-summary-table .upload-summary-divider-left {
+  border-left: 2px solid rgba(15, 109, 116, 0.18);
+}
+
 .upload-summary-table thead tr:nth-child(2) th {
   top: 47px;
   background: rgba(243, 247, 252, 0.98);
@@ -727,6 +731,10 @@ a {
 
 .upload-summary-table thead th[rowspan] {
   vertical-align: middle;
+}
+
+.upload-summary-table tbody td.upload-summary-divider-left {
+  box-shadow: inset 2px 0 0 rgba(15, 109, 116, 0.14);
 }
 
 .cell-wrap {
