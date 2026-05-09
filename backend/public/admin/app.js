@@ -882,6 +882,9 @@ function summarizeRegistrationAssets(item) {
 }
 
 function setDrawerModeCopy(mode) {
+  ui.detailDrawer.dataset.mode = mode;
+  ui.detailPreviewStage.dataset.mode = mode;
+
   if (mode === "submission") {
     ui.drawerEyebrow.textContent = "Review Upload";
     ui.drawerFieldsHeading.textContent = "Detail upload";
@@ -921,6 +924,8 @@ function openSubmissionDrawer(item) {
 function closeRegistrationDrawer() {
   selectedDrawerRecordId = null;
   selectedDrawerType = "";
+  delete ui.detailDrawer.dataset.mode;
+  delete ui.detailPreviewStage.dataset.mode;
   ui.detailPreviewStage.classList.add("hidden");
   ui.detailDrawer.classList.add("hidden");
   ui.detailDrawerBackdrop.classList.add("hidden");
