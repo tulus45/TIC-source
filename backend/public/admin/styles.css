@@ -999,6 +999,18 @@ a {
   gap: 16px;
 }
 
+.detail-drawer[data-mode="registration"] .drawer__body {
+  grid-template-columns: minmax(0, 1.35fr) minmax(220px, 0.65fr);
+  align-content: start;
+  padding: 18px 20px 24px;
+  gap: 12px;
+}
+
+.detail-drawer[data-mode="registration"] .drawer__body > .drawer-card:nth-child(1),
+.detail-drawer[data-mode="registration"] .drawer__body > .drawer-card:nth-child(2) {
+  grid-column: 1 / -1;
+}
+
 .detail-drawer[data-mode="submission"] .drawer__body {
   padding: 18px 20px 24px;
   gap: 12px;
@@ -1011,6 +1023,7 @@ a {
   border: 1px solid var(--line);
 }
 
+.detail-drawer[data-mode="registration"] .drawer-card,
 .detail-drawer[data-mode="submission"] .drawer-card {
   padding: 16px;
 }
@@ -1044,6 +1057,7 @@ a {
   margin-top: 14px;
 }
 
+.detail-drawer[data-mode="registration"] .drawer-field-grid,
 .detail-drawer[data-mode="submission"] .drawer-field-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
@@ -1056,6 +1070,7 @@ a {
   padding: 14px 16px;
 }
 
+.detail-drawer[data-mode="registration"] .detail-item,
 .detail-drawer[data-mode="submission"] .detail-item {
   gap: 6px;
   padding: 12px 14px;
@@ -1066,6 +1081,7 @@ a {
   word-break: break-word;
 }
 
+.detail-drawer[data-mode="registration"] .detail-item strong,
 .detail-drawer[data-mode="submission"] .detail-item strong {
   line-height: 1.35;
 }
@@ -1119,8 +1135,18 @@ a {
   margin-top: 14px;
 }
 
+.detail-drawer[data-mode="registration"] .note-input,
 .detail-drawer[data-mode="submission"] .note-input {
   min-height: 96px;
+}
+
+.detail-drawer[data-mode="registration"] .note-editor__footer {
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.detail-drawer[data-mode="registration"] .drawer-actions {
+  margin-top: 12px;
 }
 
 .hidden {
@@ -1159,6 +1185,13 @@ a {
   .drawer-asset-grid,
   .preview-stage__assets,
   .drawer-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-drawer[data-mode="registration"] .drawer__body,
+  .detail-drawer[data-mode="submission"] .drawer__body,
+  .detail-drawer[data-mode="registration"] .drawer-field-grid,
+  .detail-drawer[data-mode="submission"] .drawer-field-grid {
     grid-template-columns: 1fr;
   }
 
