@@ -958,6 +958,7 @@ function fillRegistrationDrawer(item, successMessage = "") {
   ui.drawerMeta.textContent = [item.gmail || "-", item.uid || "-", item.areaKerja || item.kabupaten || "Belum diisi"]
     .filter(Boolean)
     .join(" • ");
+  ui.drawerMeta.classList.remove("hidden");
   ui.drawerPrimaryLabel.textContent = item.registrationId || "-";
   ui.drawerUpdatedAt.textContent = `Diperbarui ${formatDate(item.updatedAt)}`;
   ui.drawerNoteInput.value = item.adminNote || item.rejectionReason || "";
@@ -980,6 +981,8 @@ function fillSubmissionDrawer(item, successMessage = "") {
   ui.drawerMeta.textContent = [identity.gmail || "-", item.uid || "-", kabupaten]
     .filter(Boolean)
     .join(" â€¢ ");
+  ui.drawerMeta.textContent = "";
+  ui.drawerMeta.classList.add("hidden");
   ui.drawerPrimaryLabel.textContent = item.submissionId || "-";
   ui.drawerUpdatedAt.textContent = `Diperbarui ${formatDate(item.updatedAt || item.uploadedAt || item.createdAt)}`;
   ui.drawerNoteInput.value = getSubmissionAdminNote(item);
@@ -1032,12 +1035,6 @@ function renderSubmissionDrawerFields(item, parsed = parseSubmissionAnswers(item
   const locationSummary = Object.values(parsed.selectedLocation).filter(Boolean).join(", ");
   const fields = [
     ["Submission ID", item.submissionId],
-    ["Review Status", getSubmissionReviewStatus(item)],
-    ["Upload Status", item.status],
-    ["UID", item.uid],
-    ["Gmail", identity.gmail],
-    ["Nama", identity.nama || item.formName],
-    ["Project", item.projectName],
     ["Form", item.formName],
     ["Kabupaten", getSubmissionKabupaten(item)],
     ["Lokasi", locationSummary],
