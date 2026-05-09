@@ -378,6 +378,12 @@ function getSubmissionAdminNote(item) {
   return String(item?.adminNote || item?.rejectionReason || "").trim();
 }
 
+const RAW_UPLOAD_HIDDEN_LOCATION_COLUMNS = new Set(["kecamatan", "kelurahan"]);
+
+function normalizeRawUploadColumnName(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 function getSubmissionKabupaten(item) {
   const parsed = parseSubmissionAnswers(item);
   const { kabupatenColumn } = getMasterColumnHints();
@@ -475,22 +481,16 @@ function renderSubmissionRows(items) {
   const orderedItems = getSubmissionRawItems(filteredItems);
   visibleUploadItems = orderedItems;
   const locationColumns = getSubmissionLocationColumns(orderedItems);
-  const photoColumns = getSubmissionPhotoColumns(orderedItems);
+  const visibleLocationColumns = locationColumns.filter(
+    (column) => !RAW_UPLOAD_HIDDEN_LOCATION_COLUMNS.has(normalizeRawUploadColumnName(column)),
+  );
   const headerColumns = [
     "No.",
     "Submission ID",
-    "UID",
-    "Email",
     "Nama",
     "Status",
     "Note",
-    ...locationColumns,
-    ...photoColumns,
-    "GPS Timestamp",
-    "GPS Latitude",
-    "GPS Longitude",
-    "GPS Akurasi",
-    "GPS Alamat",
+    ...visibleLocationColumns,
     "Tanggal Disimpan",
     "Tanggal Upload",
     "Review",
@@ -508,41 +508,14 @@ function renderSubmissionRows(items) {
 
     cells.push(createTextCell(index + 1, "cell-nowrap"));
     cells.push(createTextCell(item.submissionId, "cell-code"));
-    cells.push(createTextCell(item.uid, "cell-code"));
-    cells.push(createTextCell(identity.gmail, "cell-wrap"));
     cells.push(createTextCell(identity.nama, "cell-wrap"));
     cells.push(createStatusCell(getSubmissionReviewStatus(item)));
     cells.push(createTextCell(getSubmissionAdminNote(item), "cell-wrap"));
 
-    locationColumns.forEach((column) => {
+    visibleLocationColumns.forEach((column) => {
       cells.push(createTextCell(parsed.selectedLocation[column], "cell-wrap"));
     });
 
-    photoColumns.forEach((title) => {
-      const photo = parsed.photoMap.get(title);
-      const td = document.createElement("td");
-      td.className = "cell-wrap";
-
-      if (photo?.url) {
-        const link = document.createElement("a");
-        link.className = "submission-file-link";
-        link.href = photo.url;
-        link.target = "_blank";
-        link.rel = "noreferrer noopener";
-        link.textContent = photo.filename || "Lihat Foto";
-        td.appendChild(link);
-      } else {
-        td.textContent = "-";
-      }
-
-      cells.push(td);
-    });
-
-    cells.push(createTextCell(formatDate(parsed.gpsRecord.timestamp), "cell-nowrap"));
-    cells.push(createTextCell(parsed.gpsRecord.latitude, "cell-nowrap"));
-    cells.push(createTextCell(parsed.gpsRecord.longitude, "cell-nowrap"));
-    cells.push(createTextCell(parsed.gpsRecord.accuracyMeters, "cell-nowrap"));
-    cells.push(createTextCell(parsed.gpsRecord.address, "cell-wrap"));
     cells.push(createTextCell(formatDate(item.createdAt), "cell-nowrap"));
     cells.push(createTextCell(formatDate(item.uploadedAt), "cell-nowrap"));
 
