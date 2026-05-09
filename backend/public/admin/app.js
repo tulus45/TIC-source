@@ -50,6 +50,7 @@ const ui = {
   masterFileInput: document.getElementById("masterFileInput"),
   masterUploadButton: document.getElementById("masterUploadButton"),
   masterRefreshButton: document.getElementById("masterRefreshButton"),
+  masterDriveCheckButton: document.getElementById("masterDriveCheckButton"),
   masterUploadStatus: document.getElementById("masterUploadStatus"),
   masterDataInfo: document.getElementById("masterDataInfo"),
   masterColumnsValue: document.getElementById("masterColumnsValue"),
@@ -91,6 +92,7 @@ const ui = {
   drawerApproveButton: document.getElementById("drawerApproveButton"),
   drawerRejectButton: document.getElementById("drawerRejectButton"),
   drawerSuspendButton: document.getElementById("drawerSuspendButton"),
+  drawerDeleteButton: document.getElementById("drawerDeleteButton"),
 };
 
 const statusFilterField = ui.statusFilter.closest(".toolbar__field");
@@ -238,6 +240,55 @@ async function loadMasterDataInfo() {
     refreshToolbarSummary();
     updateDashboardMetrics();
     showError(error.message || "Belum bisa memuat info master data.");
+  }
+}
+
+function formatGoogleDriveCheckMessage(payload) {
+  const serviceAccount = payload?.serviceAccountEmail || "-";
+  const registration = payload?.registration || {};
+  const submission = payload?.submission || {};
+
+  const describe = (label, result) => {
+    if (result?.ok) {
+      const folderName = result.folderName || result.folderId || "-";
+      if (result.warning) {
+        return `${label}: OK di ${folderName}, tetapi ${result.warning.toLowerCase()}`;
+      }
+      return `${label}: OK di ${folderName}`;
+    }
+
+    return `${label}: ${result?.error || "gagal dicek"}`;
+  };
+
+  return [
+    `Service account: ${serviceAccount}.`,
+    describe("Registration", registration),
+    describe("Submission", submission),
+  ].join(" | ");
+}
+
+async function runGoogleDriveCheck() {
+  hideError();
+  setMasterUploadState("Mengecek akses Google Drive...", "saving");
+  ui.masterDriveCheckButton.disabled = true;
+
+  try {
+    const { response, payload } = await fetchJson("/api/admin/google-drive/check");
+    const message = formatGoogleDriveCheckMessage(payload);
+
+    if (!response.ok || !payload?.ok) {
+      setMasterUploadState(message, "error");
+      showError(message);
+      return;
+    }
+
+    setMasterUploadState(message, "saved");
+  } catch (error) {
+    const message = error.message || "Belum bisa mengecek Google Drive.";
+    setMasterUploadState(message, "error");
+    showError(message);
+  } finally {
+    ui.masterDriveCheckButton.disabled = false;
   }
 }
 
@@ -508,7 +559,7 @@ function renderSubmissionRows(items) {
     ...visibleLocationColumns,
     "Tanggal Disimpan",
     "Tanggal Upload",
-    "Review",
+    "Aksi",
   ];
 
   const headerRow = document.createElement("tr");
@@ -535,12 +586,32 @@ function renderSubmissionRows(items) {
     cells.push(createTextCell(formatDate(item.uploadedAt), "cell-nowrap"));
 
     const reviewCell = document.createElement("td");
+    const actionStack = document.createElement("div");
+    actionStack.className = "row-action-stack";
+
     const reviewButton = document.createElement("button");
     reviewButton.type = "button";
     reviewButton.className = "button button--secondary button--small";
     reviewButton.textContent = "Review";
     reviewButton.addEventListener("click", () => openSubmissionDrawer(item));
-    reviewCell.appendChild(reviewButton);
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "button button--reject button--small";
+    deleteButton.textContent = "Hapus";
+    deleteButton.addEventListener("click", async () => {
+      reviewButton.disabled = true;
+      deleteButton.disabled = true;
+      const deleted = await deleteSubmissionRecord(item);
+      if (!deleted) {
+        reviewButton.disabled = false;
+        deleteButton.disabled = false;
+      }
+    });
+
+    actionStack.appendChild(reviewButton);
+    actionStack.appendChild(deleteButton);
+    reviewCell.appendChild(actionStack);
     cells.push(reviewCell);
 
     cells.forEach((cell) => tr.appendChild(cell));
@@ -856,6 +927,57 @@ async function updateSelectedRegistrationStatus(action) {
   }
 }
 
+async function deleteSubmissionRecord(item) {
+  const submissionId = item?.submissionId;
+  if (!submissionId) {
+    return false;
+  }
+
+  const confirmed = window.confirm(
+    `Hapus submission ${submissionId}?\n\nData raw upload dan file evidence terkait akan dihapus permanen.`,
+  );
+  if (!confirmed) {
+    return false;
+  }
+
+  hideError();
+  const isSelectedDrawerItem = selectedDrawerType === "submission" && selectedDrawerRecordId === submissionId;
+  if (isSelectedDrawerItem) {
+    setDrawerActionLoading(true);
+  }
+
+  try {
+    const { response, payload } = await fetchJson(`/api/admin/submissions/${encodeURIComponent(submissionId)}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      throw new Error(payload.error || payload.details || "Gagal menghapus submission.");
+    }
+
+    removeSubmissionRecord(submissionId);
+    renderSubmissionRows(uploadItems);
+    renderSubmissionSummary(uploadItems);
+    refreshSubmissionBreakdown();
+    refreshToolbarSummary();
+    updateDashboardMetrics();
+    touchLastSync();
+
+    if (isSelectedDrawerItem) {
+      closeRegistrationDrawer();
+    }
+
+    return true;
+  } catch (error) {
+    showError(error.message || "Gagal menghapus submission.");
+    return false;
+  } finally {
+    if (isSelectedDrawerItem) {
+      setDrawerActionLoading(false);
+    }
+  }
+}
+
 function setLoading(isLoading) {
   updateExportButtonState(isLoading);
 }
@@ -1089,6 +1211,7 @@ function refreshSelectedRegistration(successMessage = "") {
 
 function fillRegistrationDrawer(item, successMessage = "") {
   setDrawerModeCopy("registration");
+  ui.drawerDeleteButton.classList.add("hidden");
   ui.drawerStatusPill.textContent = item.status || "-";
   ui.drawerStatusPill.dataset.status = item.status || "";
   ui.drawerTitle.textContent = item.nama || item.displayName || "Tanpa nama";
@@ -1112,6 +1235,7 @@ function fillSubmissionDrawer(item, successMessage = "") {
   const kabupaten = getSubmissionKabupaten(item);
 
   setDrawerModeCopy("submission");
+  ui.drawerDeleteButton.classList.remove("hidden");
   ui.drawerStatusPill.textContent = reviewStatus;
   ui.drawerStatusPill.dataset.status = reviewStatus;
   ui.drawerTitle.textContent = identity.nama || item.formName || item.submissionId || "Raw upload";
@@ -1357,6 +1481,7 @@ function setDrawerActionAvailability(item) {
   ui.drawerApproveButton.disabled = !hasSelection || status === "APPROVED";
   ui.drawerRejectButton.disabled = !hasSelection || status === "REJECTED";
   ui.drawerSuspendButton.disabled = !hasSelection || status === "SUSPENDED";
+  ui.drawerDeleteButton.disabled = !hasSelection || selectedDrawerType !== "submission";
 }
 
 function setDrawerActionLoading(isLoading) {
@@ -1366,6 +1491,7 @@ function setDrawerActionLoading(isLoading) {
     ui.drawerApproveButton.disabled = true;
     ui.drawerRejectButton.disabled = true;
     ui.drawerSuspendButton.disabled = true;
+    ui.drawerDeleteButton.disabled = true;
     return;
   }
 
@@ -1436,6 +1562,10 @@ function mergeSubmissionRecord(partial) {
   uploadItems = uploadItems.map((item) => (
     item.submissionId === partial.submissionId ? { ...item, ...partial } : item
   ));
+}
+
+function removeSubmissionRecord(submissionId) {
+  uploadItems = uploadItems.filter((item) => item.submissionId !== submissionId);
 }
 
 function exportToExcel() {
@@ -2527,6 +2657,7 @@ ui.rawStatusFilter.addEventListener("change", () => renderSubmissionRows(uploadI
 ui.rawSearchInput.addEventListener("input", () => renderSubmissionRows(uploadItems));
 ui.masterUploadButton.addEventListener("click", uploadMasterDataExcel);
 ui.masterRefreshButton.addEventListener("click", loadMasterDataInfo);
+ui.masterDriveCheckButton.addEventListener("click", runGoogleDriveCheck);
 ui.masterFileInput.addEventListener("change", () => {
   const file = ui.masterFileInput.files?.[0];
   setMasterUploadState(file ? `Siap upload: ${file.name}` : "Belum ada file dipilih.", file ? "dirty" : "");
@@ -2544,6 +2675,14 @@ ui.drawerNoteSaveButton.addEventListener("click", saveSelectedRegistrationNote);
 ui.drawerApproveButton.addEventListener("click", () => updateSelectedRegistrationStatus("approve"));
 ui.drawerRejectButton.addEventListener("click", () => updateSelectedRegistrationStatus("reject"));
 ui.drawerSuspendButton.addEventListener("click", () => updateSelectedRegistrationStatus("suspend"));
+ui.drawerDeleteButton.addEventListener("click", async () => {
+  const item = findSelectedDrawerItem();
+  if (!item || selectedDrawerType !== "submission") {
+    return;
+  }
+
+  await deleteSubmissionRecord(item);
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !ui.detailDrawer.classList.contains("hidden")) {
     closeRegistrationDrawer();

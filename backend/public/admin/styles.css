@@ -538,6 +538,12 @@ a {
   padding: 9px 12px;
 }
 
+.row-action-stack {
+  display: grid;
+  gap: 8px;
+  min-width: 110px;
+}
+
 .registrations-table thead th {
   position: sticky;
   top: 0;
@@ -1314,7 +1320,7 @@ a {
 
 .drawer-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 10px;
   margin-top: 14px;
 }

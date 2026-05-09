@@ -637,6 +637,39 @@ async function fetchGoogleDriveFile(fileId) {
   };
 }
 
+async function fetchGoogleDriveMetadata(fileId, fields = "id,name,mimeType,driveId,parents,trashed") {
+  ensureGoogleDriveConfig();
+
+  const normalizedFileId = normalizeString(fileId);
+  if (!normalizedFileId) {
+    throw new Error("File ID Google Drive tidak valid.");
+  }
+
+  const token = await getGoogleDriveAccessToken();
+  const fileUrl = new URL(`${googleDriveConfig.fileBaseUrl}/${encodeURIComponent(normalizedFileId)}`);
+  fileUrl.searchParams.set("supportsAllDrives", "true");
+  fileUrl.searchParams.set("fields", fields);
+
+  const response = await fetch(fileUrl, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const payload = await parseJsonResponseSafe(response);
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error("Folder Google Drive tidak ditemukan.");
+    }
+
+    throw new Error(
+      `Gagal membaca metadata Google Drive: ${payload.error?.message || payload.raw || response.status}`,
+    );
+  }
+
+  return payload;
+}
+
 function extractGoogleDriveFileIdFromProxyUrl(value) {
   const normalized = normalizeString(value);
   if (!normalized.startsWith("/uploads/google-drive/")) {
@@ -681,6 +714,37 @@ async function deleteGoogleDriveFile(fileId) {
       `Gagal menghapus file Google Drive: ${payload.error?.message || payload.raw || response.status}`,
     );
   }
+}
+
+async function runGoogleDriveFolderCheck(kind) {
+  const folderId = getGoogleDriveFolderId(kind);
+  const metadata = await fetchGoogleDriveMetadata(folderId);
+  const testFileName = `tic-drive-check-${kind}-${Date.now()}.txt`;
+  const uploadResult = await uploadBufferToGoogleDrive({
+    buffer: Buffer.from(`TIC Google Drive check ${kind} ${new Date().toISOString()}`, "utf8"),
+    fileName: testFileName,
+    mimeType: "text/plain; charset=utf-8",
+    parentFolderId: folderId,
+  });
+
+  let cleanupError = "";
+  try {
+    await deleteGoogleDriveFile(uploadResult.id);
+  } catch (error) {
+    cleanupError = error instanceof Error ? error.message : String(error);
+  }
+
+  return {
+    kind,
+    ok: true,
+    folderId,
+    folderName: normalizeString(metadata.name) || "(tanpa nama)",
+    mimeType: normalizeString(metadata.mimeType),
+    driveId: normalizeString(metadata.driveId) || null,
+    testUploadFileId: uploadResult.id,
+    cleanupError: cleanupError || null,
+    warning: cleanupError ? "File test berhasil dibuat, tetapi gagal dihapus kembali." : null,
+  };
 }
 
 function buildRegistrationStorageFileName(uid, assetType, originalFileName, mimeType) {
@@ -1417,6 +1481,54 @@ async function handleApi(req, res, url) {
       items: filtered.sort((a, b) => String(b.uploadedAt || b.createdAt).localeCompare(String(a.uploadedAt || a.createdAt))),
       count: filtered.length,
     });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/google-drive/check") {
+    if (!isGoogleDriveStorageEnabled()) {
+      sendJson(res, 409, {
+        ok: false,
+        error: "Mode Google Drive belum aktif di server ini.",
+        mode: googleDriveConfig.mode,
+        checkedAt: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const checkedAt = new Date().toISOString();
+    const result = {
+      ok: false,
+      mode: googleDriveConfig.mode,
+      serviceAccountEmail: googleDriveConfig.clientEmail,
+      checkedAt,
+      registration: null,
+      submission: null,
+    };
+
+    try {
+      result.registration = await runGoogleDriveFolderCheck("registration");
+    } catch (error) {
+      result.registration = {
+        kind: "registration",
+        ok: false,
+        folderId: normalizeString(googleDriveConfig.registrationsFolderId),
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    try {
+      result.submission = await runGoogleDriveFolderCheck("submission");
+    } catch (error) {
+      result.submission = {
+        kind: "submission",
+        ok: false,
+        folderId: normalizeString(googleDriveConfig.submissionsFolderId),
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    result.ok = Boolean(result.registration?.ok && result.submission?.ok);
+    sendJson(res, result.ok ? 200 : 500, result);
     return;
   }
 
