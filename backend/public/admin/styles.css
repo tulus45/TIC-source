@@ -497,6 +497,47 @@ a {
   min-width: 1480px;
 }
 
+#uploadTableScroll {
+  overflow-x: visible;
+}
+
+#uploadRawTable {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+#uploadRawTable thead th {
+  padding: 12px 10px;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+#uploadRawTable tbody td {
+  padding: 12px 10px;
+  font-size: 13px;
+}
+
+#uploadRawTable .cell-wrap,
+#uploadRawTable .cell-code,
+#uploadRawTable .cell-nowrap {
+  min-width: 0;
+  max-width: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+#uploadRawTable .status-pill {
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+}
+
+#uploadRawTable .button--small {
+  width: 100%;
+  padding: 9px 12px;
+}
+
 .registrations-table thead th {
   position: sticky;
   top: 0;
