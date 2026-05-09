@@ -20,6 +20,22 @@ Storage backend sekarang bisa diarahkan lewat environment variable:
 - `TIC_DATA_DIR`
 - `TIC_UPLOADS_DIR`
 
+Mode penyimpanan asset foto juga bisa dipindah ke Google Drive:
+
+- `TIC_ASSET_STORAGE_MODE=google-drive`
+- `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`
+  atau path file secret:
+  `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_FILE`
+  atau pasangan:
+  `GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL`
+  dan
+  `GOOGLE_DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY`
+- `GOOGLE_DRIVE_FOLDER_ID`
+  atau folder terpisah:
+  `GOOGLE_DRIVE_REGISTRATIONS_FOLDER_ID`
+  dan
+  `GOOGLE_DRIVE_SUBMISSIONS_FOLDER_ID`
+
 Kalau variabel itu tidak diisi, backend tetap memakai folder lokal seperti sekarang.
 
 ## Yang Sudah Bisa
@@ -39,8 +55,41 @@ Catatan:
 
 - backend ini masih menyimpan data di file `backend/data/registrations.json`
 - master data sekolah sekarang disimpan di `school_master.json` pada folder data runtime yang persisten
-- file KTP dan selfie sekarang disimpan sungguhan di folder `backend/uploads/registrations/...`
-- field `ktpDriveFileId` dan `selfieDriveFileId` saat ini dipakai sebagai URL file upload hasil simpan backend lokal
+- file KTP, selfie, dan foto evidence bisa tetap disimpan lokal di `backend/uploads/...`
+- kalau `TIC_ASSET_STORAGE_MODE=google-drive`, file foto diupload ke Google Drive dan backend hanya menyimpan metadata + proxy URL `/uploads/google-drive/...`
+
+## Mode Google Drive
+
+Kalau Anda ingin hemat storage Render, aktifkan:
+
+```env
+TIC_ASSET_STORAGE_MODE=google-drive
+GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+GOOGLE_DRIVE_FOLDER_ID=FOLDER_ID_SHARED_DRIVE
+```
+
+Atau lebih aman di Render, upload file JSON key sebagai Secret File lalu pakai:
+
+```env
+TIC_ASSET_STORAGE_MODE=google-drive
+GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_FILE=/etc/secrets/google-drive-service-account.json
+GOOGLE_DRIVE_FOLDER_ID=FOLDER_ID_SHARED_DRIVE
+```
+
+Atau pakai folder terpisah:
+
+```env
+GOOGLE_DRIVE_REGISTRATIONS_FOLDER_ID=FOLDER_ID_REGISTRATIONS
+GOOGLE_DRIVE_SUBMISSIONS_FOLDER_ID=FOLDER_ID_SUBMISSIONS
+```
+
+Catatan penting:
+
+- service account Google Drive tidak bisa memiliki file sendiri, jadi folder tujuan harus berada di **Shared Drive** atau upload dilakukan atas nama user manusia
+- backend ini otomatis memakai `supportsAllDrives=true` saat upload/download file Google Drive
+- admin web tetap membuka preview lewat URL backend, jadi file Google Drive tidak perlu dibuka publik satu per satu
+- persistent disk Render masih dipakai untuk file JSON data (`registrations.json`, `submissions.json`, `school_master.json`), tetapi foto tidak lagi menumpuk di disk lokal
+- di Render, Secret File tersedia di path `/etc/secrets/<filename>` menurut dokumentasi resmi Render
 
 ## Cara Menjalankan
 
@@ -137,6 +186,16 @@ Contoh response:
   "assetType": "ktp",
   "fileName": "ktp_1746570000000.jpg",
   "fileUrl": "/uploads/registrations/tic-demo-uid-001/ktp_1746570000000.jpg"
+}
+```
+
+Jika mode `google-drive` aktif, contoh `fileUrl` akan menjadi seperti:
+
+```json
+{
+  "assetType": "ktp",
+  "fileName": "tic-demo-uid-001_ktp_1746570000000.jpg",
+  "fileUrl": "/uploads/google-drive/1AbCdEfGhIjKlMnOp/tic-demo-uid-001_ktp_1746570000000.jpg"
 }
 ```
 

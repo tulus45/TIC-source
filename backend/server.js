@@ -1,7 +1,8 @@
 const http = require("node:http");
+const fsSync = require("node:fs");
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const { createHmac, randomUUID, timingSafeEqual } = require("node:crypto");
+const { createHmac, createSign, randomUUID, timingSafeEqual } = require("node:crypto");
 const { URL } = require("node:url");
 const XLSX = require("xlsx-js-style");
 
@@ -355,6 +356,302 @@ function normalizeString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeMultilineSecret(value) {
+  return normalizeString(value).replace(/\\n/g, "\n");
+}
+
+function parseJsonEnv(value, fallback = {}) {
+  const normalized = normalizeString(value);
+  if (!normalized) return fallback;
+
+  try {
+    return JSON.parse(normalized);
+  } catch (error) {
+    throw new Error(`JSON environment variable tidak valid: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function parseJsonFileEnv(filePath, fallback = {}) {
+  const normalizedPath = normalizeString(filePath);
+  if (!normalizedPath) return fallback;
+
+  try {
+    const raw = fsSync.readFileSync(normalizedPath, "utf8");
+    return parseJsonEnv(raw, fallback);
+  } catch (error) {
+    throw new Error(
+      `Gagal membaca file JSON environment ${normalizedPath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+function getGoogleDriveConfig() {
+  const mode = normalizeString(process.env.TIC_ASSET_STORAGE_MODE).toLowerCase() || "local";
+  const serviceAccountJsonFile = normalizeString(
+    process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_FILE || process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_PATH,
+  );
+  const serviceAccountJson = parseJsonEnv(process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON, null)
+    || parseJsonFileEnv(serviceAccountJsonFile, null);
+  const rootFolderId = normalizeString(process.env.GOOGLE_DRIVE_FOLDER_ID);
+
+  const clientEmail = normalizeString(
+    serviceAccountJson?.client_email || process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL,
+  );
+  const privateKey = normalizeMultilineSecret(
+    serviceAccountJson?.private_key || process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY,
+  );
+  const privateKeyId = normalizeString(
+    serviceAccountJson?.private_key_id || process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY_ID,
+  );
+
+  return {
+    mode,
+    enabled: mode === "google-drive",
+    clientEmail,
+    privateKey,
+    privateKeyId,
+    rootFolderId,
+    registrationsFolderId: normalizeString(process.env.GOOGLE_DRIVE_REGISTRATIONS_FOLDER_ID) || rootFolderId,
+    submissionsFolderId: normalizeString(process.env.GOOGLE_DRIVE_SUBMISSIONS_FOLDER_ID) || rootFolderId,
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    uploadBaseUrl: "https://www.googleapis.com/upload/drive/v3/files",
+    fileBaseUrl: "https://www.googleapis.com/drive/v3/files",
+    scope: "https://www.googleapis.com/auth/drive",
+  };
+}
+
+const googleDriveConfig = getGoogleDriveConfig();
+let googleDriveTokenCache = {
+  accessToken: "",
+  expiresAt: 0,
+};
+
+function isGoogleDriveStorageEnabled() {
+  return googleDriveConfig.enabled;
+}
+
+function getGoogleDriveFolderId(kind) {
+  const folderId = kind === "registration"
+    ? googleDriveConfig.registrationsFolderId
+    : googleDriveConfig.submissionsFolderId;
+
+  if (!folderId) {
+    throw new Error(
+      kind === "registration"
+        ? "GOOGLE_DRIVE_REGISTRATIONS_FOLDER_ID atau GOOGLE_DRIVE_FOLDER_ID wajib diisi saat TIC_ASSET_STORAGE_MODE=google-drive."
+        : "GOOGLE_DRIVE_SUBMISSIONS_FOLDER_ID atau GOOGLE_DRIVE_FOLDER_ID wajib diisi saat TIC_ASSET_STORAGE_MODE=google-drive.",
+    );
+  }
+
+  return folderId;
+}
+
+function ensureGoogleDriveConfig() {
+  if (!isGoogleDriveStorageEnabled()) {
+    throw new Error("Google Drive storage belum diaktifkan.");
+  }
+
+  if (!googleDriveConfig.clientEmail) {
+    throw new Error("GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL wajib diisi saat TIC_ASSET_STORAGE_MODE=google-drive.");
+  }
+
+  if (!googleDriveConfig.privateKey) {
+    throw new Error("GOOGLE_DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY wajib diisi saat TIC_ASSET_STORAGE_MODE=google-drive.");
+  }
+}
+
+function toBase64Url(value) {
+  return Buffer.from(value)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+async function parseJsonResponseSafe(response) {
+  const raw = await response.text();
+  if (!raw) return {};
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { raw };
+  }
+}
+
+async function getGoogleDriveAccessToken() {
+  ensureGoogleDriveConfig();
+
+  if (googleDriveTokenCache.accessToken && googleDriveTokenCache.expiresAt > Date.now() + 30_000) {
+    return googleDriveTokenCache.accessToken;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const header = {
+    alg: "RS256",
+    typ: "JWT",
+  };
+  if (googleDriveConfig.privateKeyId) {
+    header.kid = googleDriveConfig.privateKeyId;
+  }
+
+  const claims = {
+    iss: googleDriveConfig.clientEmail,
+    scope: googleDriveConfig.scope,
+    aud: googleDriveConfig.tokenUrl,
+    exp: now + 3600,
+    iat: now,
+  };
+
+  const unsignedToken = `${toBase64Url(JSON.stringify(header))}.${toBase64Url(JSON.stringify(claims))}`;
+  const signer = createSign("RSA-SHA256");
+  signer.update(unsignedToken);
+  signer.end();
+  const signedToken = `${unsignedToken}.${toBase64Url(signer.sign(googleDriveConfig.privateKey))}`;
+
+  const tokenResponse = await fetch(googleDriveConfig.tokenUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: signedToken,
+    }).toString(),
+  });
+
+  const tokenPayload = await parseJsonResponseSafe(tokenResponse);
+  if (!tokenResponse.ok || !normalizeString(tokenPayload.access_token)) {
+    throw new Error(
+      `Gagal mengambil access token Google Drive: ${tokenPayload.error_description || tokenPayload.error || tokenPayload.raw || tokenResponse.status}`,
+    );
+  }
+
+  googleDriveTokenCache = {
+    accessToken: tokenPayload.access_token,
+    expiresAt: Date.now() + Math.max((Number(tokenPayload.expires_in) || 3600) - 60, 60) * 1000,
+  };
+
+  return googleDriveTokenCache.accessToken;
+}
+
+function createGoogleDriveProxyUrl(fileId, fileName = "file") {
+  return `/uploads/google-drive/${encodeURIComponent(fileId)}/${encodeURIComponent(fileName)}`;
+}
+
+async function uploadBufferToGoogleDrive({ buffer, fileName, mimeType, parentFolderId }) {
+  ensureGoogleDriveConfig();
+
+  const token = await getGoogleDriveAccessToken();
+  const initUrl = new URL(googleDriveConfig.uploadBaseUrl);
+  initUrl.searchParams.set("uploadType", "resumable");
+  initUrl.searchParams.set("supportsAllDrives", "true");
+  initUrl.searchParams.set("fields", "id,name,mimeType,size");
+
+  const metadata = {
+    name: fileName,
+    parents: [parentFolderId],
+  };
+
+  const initResponse = await fetch(initUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json; charset=UTF-8",
+      "X-Upload-Content-Type": mimeType || "application/octet-stream",
+      "X-Upload-Content-Length": String(buffer.length),
+    },
+    body: JSON.stringify(metadata),
+  });
+
+  if (!initResponse.ok) {
+    const payload = await parseJsonResponseSafe(initResponse);
+    throw new Error(
+      `Gagal membuat sesi upload Google Drive: ${payload.error?.message || payload.raw || initResponse.status}`,
+    );
+  }
+
+  const sessionUrl = normalizeString(initResponse.headers.get("location"));
+  if (!sessionUrl) {
+    throw new Error("Google Drive tidak mengembalikan URL sesi upload.");
+  }
+
+  const uploadResponse = await fetch(sessionUrl, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": mimeType || "application/octet-stream",
+      "Content-Length": String(buffer.length),
+    },
+    body: buffer,
+  });
+
+  const uploadPayload = await parseJsonResponseSafe(uploadResponse);
+  if (!uploadResponse.ok || !normalizeString(uploadPayload.id)) {
+    throw new Error(
+      `Gagal mengunggah file ke Google Drive: ${uploadPayload.error?.message || uploadPayload.raw || uploadResponse.status}`,
+    );
+  }
+
+  return {
+    id: uploadPayload.id,
+    name: normalizeString(uploadPayload.name) || fileName,
+    mimeType: normalizeString(uploadPayload.mimeType) || mimeType || "application/octet-stream",
+  };
+}
+
+async function fetchGoogleDriveFile(fileId) {
+  ensureGoogleDriveConfig();
+
+  const normalizedFileId = normalizeString(fileId);
+  if (!normalizedFileId) {
+    throw new Error("File ID Google Drive tidak valid.");
+  }
+
+  const token = await getGoogleDriveAccessToken();
+  const fileUrl = new URL(`${googleDriveConfig.fileBaseUrl}/${encodeURIComponent(normalizedFileId)}`);
+  fileUrl.searchParams.set("alt", "media");
+  fileUrl.searchParams.set("supportsAllDrives", "true");
+
+  const response = await fetch(fileUrl, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await parseJsonResponseSafe(response);
+    if (response.status === 404) {
+      throw new Error("File Google Drive tidak ditemukan.");
+    }
+    throw new Error(
+      `Gagal membaca file Google Drive: ${payload.error?.message || payload.raw || response.status}`,
+    );
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    contentType: normalizeString(response.headers.get("content-type")) || "application/octet-stream",
+    contentLength: normalizeString(response.headers.get("content-length")),
+  };
+}
+
+function buildRegistrationStorageFileName(uid, assetType, originalFileName, mimeType) {
+  const extension = getUploadExtension(originalFileName, mimeType);
+  const timestamp = Date.now();
+  const safeUid = sanitizePathSegment(uid, "unknown_uid");
+  return `${safeUid}_${assetType}_${timestamp}${extension}`;
+}
+
+function buildSubmissionStorageFileName(uid, submissionId, index, originalFileName, mimeType) {
+  const extension = getUploadExtension(originalFileName, mimeType);
+  const safeUid = sanitizePathSegment(uid, "unknown_uid");
+  const safeSubmissionId = sanitizePathSegment(submissionId, `submission_${Date.now()}`);
+  const safeBaseName = sanitizePathSegment(path.parse(originalFileName).name, `evidence_${index + 1}`);
+  return `${safeUid}_${safeSubmissionId}_${String(index + 1).padStart(2, "0")}_${safeBaseName}${extension}`;
+}
+
 function normalizeNonNegativeInteger(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) {
@@ -644,22 +941,43 @@ async function storeSubmissionFiles(uid, submissionId, files) {
 
   const safeUid = sanitizePathSegment(uid, "unknown_uid");
   const safeSubmissionId = sanitizePathSegment(submissionId, `submission_${Date.now()}`);
+  const useGoogleDrive = isGoogleDriveStorageEnabled();
   const targetDir = path.join(uploadsDir, "submissions", safeUid, safeSubmissionId);
-  await fs.mkdir(targetDir, { recursive: true });
+  if (!useGoogleDrive) {
+    await fs.mkdir(targetDir, { recursive: true });
+  }
 
   const storedFiles = [];
   for (const [index, file] of files.entries()) {
     const originalFileName = normalizeString(file.filename) || `evidence_${index + 1}.jpg`;
-    const extension = getUploadExtension(originalFileName, file.mimeType);
-    const safeBaseName = sanitizePathSegment(path.parse(originalFileName).name, `evidence_${index + 1}`);
-    const storedFileName = `${String(index + 1).padStart(2, "0")}_${safeBaseName}${extension}`;
     const base64Data = normalizeString(file.base64Data);
     let fileUrl = normalizeString(file.driveFileId) || null;
+    let storedFileName = originalFileName;
 
     if (base64Data) {
-      const targetPath = path.join(targetDir, storedFileName);
-      await fs.writeFile(targetPath, Buffer.from(base64Data, "base64"));
-      fileUrl = `/uploads/submissions/${encodeURIComponent(safeUid)}/${encodeURIComponent(safeSubmissionId)}/${encodeURIComponent(storedFileName)}`;
+      if (useGoogleDrive) {
+        storedFileName = buildSubmissionStorageFileName(
+          uid,
+          submissionId,
+          index,
+          originalFileName,
+          file.mimeType,
+        );
+        const uploadResult = await uploadBufferToGoogleDrive({
+          buffer: Buffer.from(base64Data, "base64"),
+          fileName: storedFileName,
+          mimeType: normalizeString(file.mimeType) || "image/jpeg",
+          parentFolderId: getGoogleDriveFolderId("submission"),
+        });
+        fileUrl = createGoogleDriveProxyUrl(uploadResult.id, uploadResult.name);
+      } else {
+        const storedExtension = getUploadExtension(originalFileName, file.mimeType);
+        const safeBaseName = sanitizePathSegment(path.parse(originalFileName).name, `evidence_${index + 1}`);
+        storedFileName = `${String(index + 1).padStart(2, "0")}_${safeBaseName}${storedExtension}`;
+        const targetPath = path.join(targetDir, storedFileName);
+        await fs.writeFile(targetPath, Buffer.from(base64Data, "base64"));
+        fileUrl = `/uploads/submissions/${encodeURIComponent(safeUid)}/${encodeURIComponent(safeSubmissionId)}/${encodeURIComponent(storedFileName)}`;
+      }
     }
 
     storedFiles.push({
@@ -668,7 +986,7 @@ async function storeSubmissionFiles(uid, submissionId, files) {
       fileType: normalizeString(file.fileType) || "PHOTO",
       localPath: normalizeString(file.localPath),
       driveFileId: fileUrl,
-      filename: originalFileName,
+      filename: storedFileName,
       createdAt: normalizeString(file.createdAt) || new Date().toISOString(),
       mimeType: normalizeString(file.mimeType) || "image/jpeg",
     });
@@ -680,21 +998,31 @@ async function storeSubmissionFiles(uid, submissionId, files) {
 async function storeRegistrationAsset(body) {
   const uid = normalizeString(body.uid);
   const assetType = normalizeString(body.assetType).toLowerCase();
-  const extension = getUploadExtension(body.fileName, body.mimeType);
-  const timestamp = Date.now();
   const safeUid = uid.replace(/[^a-zA-Z0-9_-]/g, "_");
-  const safeFileName = `${assetType}_${timestamp}${extension}`;
-  const targetDir = path.join(uploadsDir, "registrations", safeUid);
-  const targetPath = path.join(targetDir, safeFileName);
+  const safeFileName = buildRegistrationStorageFileName(uid, assetType, body.fileName, body.mimeType);
 
-  await fs.mkdir(targetDir, { recursive: true });
-  await fs.writeFile(targetPath, Buffer.from(normalizeString(body.base64Data), "base64"));
+  let fileUrl;
+  if (isGoogleDriveStorageEnabled()) {
+    const uploadResult = await uploadBufferToGoogleDrive({
+      buffer: Buffer.from(normalizeString(body.base64Data), "base64"),
+      fileName: safeFileName,
+      mimeType: normalizeString(body.mimeType) || "image/jpeg",
+      parentFolderId: getGoogleDriveFolderId("registration"),
+    });
+    fileUrl = createGoogleDriveProxyUrl(uploadResult.id, uploadResult.name);
+  } else {
+    const targetDir = path.join(uploadsDir, "registrations", safeUid);
+    const targetPath = path.join(targetDir, safeFileName);
 
-  const relativeFilePath = `/uploads/registrations/${encodeURIComponent(safeUid)}/${encodeURIComponent(safeFileName)}`;
+    await fs.mkdir(targetDir, { recursive: true });
+    await fs.writeFile(targetPath, Buffer.from(normalizeString(body.base64Data), "base64"));
+    fileUrl = `/uploads/registrations/${encodeURIComponent(safeUid)}/${encodeURIComponent(safeFileName)}`;
+  }
+
   return {
     assetType,
     fileName: safeFileName,
-    fileUrl: relativeFilePath,
+    fileUrl,
   };
 }
 
@@ -731,7 +1059,9 @@ async function buildSubmissionRecord(body) {
     gpsLat: typeof body.gpsLat === "number" ? body.gpsLat : null,
     gpsLng: typeof body.gpsLng === "number" ? body.gpsLng : null,
     gpsAccuracy: typeof body.gpsAccuracy === "number" ? body.gpsAccuracy : null,
-    driveFolderId: normalizeString(body.driveFolderId) || null,
+    driveFolderId: isGoogleDriveStorageEnabled()
+      ? getGoogleDriveFolderId("submission")
+      : normalizeString(body.driveFolderId) || null,
     status: "UPLOADED",
     reviewStatus: "PENDING",
     adminNote: null,
@@ -1292,6 +1622,37 @@ const server = http.createServer(async (req, res) => {
       }
 
       await sendStatic(res, "admin/index.html");
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname.startsWith("/uploads/google-drive/")) {
+      const relativePath = url.pathname.replace(/^\/uploads\/google-drive\//, "");
+      const [rawFileId] = relativePath.split("/");
+      let fileId = "";
+      try {
+        fileId = decodeURIComponent(rawFileId || "");
+      } catch {
+        sendText(res, 400, "File ID tidak valid.");
+        return;
+      }
+
+      try {
+        const file = await fetchGoogleDriveFile(fileId);
+        res.writeHead(200, {
+          "Content-Type": file.contentType,
+          "Content-Length": file.contentLength || String(file.buffer.length),
+          "Cache-Control": "no-store",
+        });
+        res.end(file.buffer);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "File Google Drive tidak ditemukan.";
+        const statusCode = /tidak valid/i.test(message)
+          ? 400
+          : /tidak ditemukan/i.test(message)
+            ? 404
+            : 500;
+        sendText(res, statusCode, message);
+      }
       return;
     }
 
