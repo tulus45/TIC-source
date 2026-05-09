@@ -282,7 +282,7 @@ function sendJson(res, statusCode, payload, extraHeaders = {}) {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     ...extraHeaders,
   });
@@ -637,6 +637,52 @@ async function fetchGoogleDriveFile(fileId) {
   };
 }
 
+function extractGoogleDriveFileIdFromProxyUrl(value) {
+  const normalized = normalizeString(value);
+  if (!normalized.startsWith("/uploads/google-drive/")) {
+    return "";
+  }
+
+  const relativePath = normalized.replace(/^\/uploads\/google-drive\//, "");
+  const [rawFileId] = relativePath.split("/");
+  try {
+    return decodeURIComponent(rawFileId || "");
+  } catch {
+    return "";
+  }
+}
+
+async function deleteGoogleDriveFile(fileId) {
+  ensureGoogleDriveConfig();
+
+  const normalizedFileId = normalizeString(fileId);
+  if (!normalizedFileId) {
+    return;
+  }
+
+  const token = await getGoogleDriveAccessToken();
+  const fileUrl = new URL(`${googleDriveConfig.fileBaseUrl}/${encodeURIComponent(normalizedFileId)}`);
+  fileUrl.searchParams.set("supportsAllDrives", "true");
+
+  const response = await fetch(fileUrl, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (response.status === 404) {
+    return;
+  }
+
+  if (!response.ok) {
+    const payload = await parseJsonResponseSafe(response);
+    throw new Error(
+      `Gagal menghapus file Google Drive: ${payload.error?.message || payload.raw || response.status}`,
+    );
+  }
+}
+
 function buildRegistrationStorageFileName(uid, assetType, originalFileName, mimeType) {
   const extension = getUploadExtension(originalFileName, mimeType);
   const timestamp = Date.now();
@@ -934,6 +980,28 @@ function sanitizePathSegment(value, fallback = "item") {
   return normalized || fallback;
 }
 
+async function deleteSubmissionStoredFiles(record) {
+  const driveFileIds = Array.from(new Set(
+    (Array.isArray(record?.files) ? record.files : [])
+      .map((file) => extractGoogleDriveFileIdFromProxyUrl(file?.driveFileId))
+      .filter(Boolean),
+  ));
+
+  for (const fileId of driveFileIds) {
+    await deleteGoogleDriveFile(fileId);
+  }
+
+  const safeUid = sanitizePathSegment(record?.uid, "unknown_uid");
+  const safeSubmissionId = sanitizePathSegment(record?.submissionId, "submission");
+  const submissionsBaseDir = path.resolve(path.join(uploadsDir, "submissions"));
+  const targetDir = path.resolve(path.join(submissionsBaseDir, safeUid, safeSubmissionId));
+  const allowedPrefix = `${submissionsBaseDir}${path.sep}`;
+
+  if (targetDir.startsWith(allowedPrefix)) {
+    await fs.rm(targetDir, { recursive: true, force: true });
+  }
+}
+
 async function storeSubmissionFiles(uid, submissionId, files) {
   if (!Array.isArray(files) || !files.length) {
     return [];
@@ -1078,7 +1146,7 @@ async function handleApi(req, res, url) {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+      "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     });
     res.end();
@@ -1172,9 +1240,11 @@ async function handleApi(req, res, url) {
       const uploadResult = await storeRegistrationAsset(body);
       sendJson(res, 201, uploadResult);
     } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      console.error("Registration asset upload failed:", details);
       sendJson(res, 500, {
-        error: "Gagal menyimpan file upload.",
-        details: error instanceof Error ? error.message : String(error),
+        error: `Gagal menyimpan file upload. ${details}`,
+        details,
       });
     }
     return;
@@ -1277,27 +1347,36 @@ async function handleApi(req, res, url) {
       return;
     }
 
-    const items = await readSubmissions();
-    const record = await buildSubmissionRecord(body);
-    const existingIndex = items.findIndex((item) => item.submissionId === record.submissionId);
-    if (existingIndex >= 0) {
-      items[existingIndex] = {
-        ...items[existingIndex],
-        ...record,
-        createdAt: items[existingIndex].createdAt || record.createdAt,
-      };
-    } else {
-      items.unshift(record);
-    }
+    try {
+      const items = await readSubmissions();
+      const record = await buildSubmissionRecord(body);
+      const existingIndex = items.findIndex((item) => item.submissionId === record.submissionId);
+      if (existingIndex >= 0) {
+        items[existingIndex] = {
+          ...items[existingIndex],
+          ...record,
+          createdAt: items[existingIndex].createdAt || record.createdAt,
+        };
+      } else {
+        items.unshift(record);
+      }
 
-    await writeSubmissions(items);
-    sendJson(res, 201, {
-      submissionId: record.submissionId,
-      driveFolderId: record.driveFolderId,
-      driveFileIds: record.files.map((file) => file.driveFileId).filter(Boolean),
-      uploadStatus: record.status,
-      uploadedAt: record.uploadedAt,
-    });
+      await writeSubmissions(items);
+      sendJson(res, 201, {
+        submissionId: record.submissionId,
+        driveFolderId: record.driveFolderId,
+        driveFileIds: record.files.map((file) => file.driveFileId).filter(Boolean),
+        uploadStatus: record.status,
+        uploadedAt: record.uploadedAt,
+      });
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      console.error("Submission upload failed:", details);
+      sendJson(res, 500, {
+        error: `Gagal menyimpan submission. ${details}`,
+        details,
+      });
+    }
     return;
   }
 
@@ -1337,6 +1416,38 @@ async function handleApi(req, res, url) {
     sendJson(res, 200, {
       items: filtered.sort((a, b) => String(b.uploadedAt || b.createdAt).localeCompare(String(a.uploadedAt || a.createdAt))),
       count: filtered.length,
+    });
+    return;
+  }
+
+  const submissionDeleteMatch = url.pathname.match(/^\/api\/admin\/submissions\/([^/]+)$/);
+  if (req.method === "DELETE" && submissionDeleteMatch) {
+    const [, submissionId] = submissionDeleteMatch;
+    const items = await readSubmissions();
+    const targetIndex = items.findIndex((item) => item.submissionId === submissionId);
+
+    if (targetIndex < 0) {
+      sendJson(res, 404, { error: "Submission tidak ditemukan." });
+      return;
+    }
+
+    const [target] = items.splice(targetIndex, 1);
+
+    try {
+      await deleteSubmissionStoredFiles(target);
+    } catch (error) {
+      sendJson(res, 500, {
+        error: "Submission ditemukan, tetapi file terkait belum bisa dihapus.",
+        details: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+
+    await writeSubmissions(items);
+    sendJson(res, 200, {
+      submissionId,
+      deleted: true,
+      deletedAt: new Date().toISOString(),
     });
     return;
   }
