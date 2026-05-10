@@ -267,10 +267,16 @@ function renderAppReleasePolicy(payload, errorMessage = "") {
   ui.appReleaseLatestVersionNameInput.value = policy.latestVersionName || "";
   ui.appReleaseUpdateUrlInput.value = policy.updateUrl || "";
   ui.appReleaseUpdateMessageInput.value = policy.updateMessage || "";
+  const latestReleaseLabel = policy.latestVersionName || policy.latestVersionCode || "-";
+  const detectedReleaseLabel = policy.detectedVersionName || policy.detectedVersionCode || "-";
+  const sourceLabel = policy.mode === "manual"
+    ? "override manual dari panel admin"
+    : "otomatis dari versi APK source/backend";
   ui.appReleasePolicyInfo.textContent = errorMessage || (
     payload
       ? `Policy aktif diperbarui ${policy.updatedAt ? formatDate(policy.updatedAt) : "-"}.
-Versi wajib approved: ${Number(policy.minimumApprovedVersionCode) || 0}. Latest release: ${policy.latestVersionName || policy.latestVersionCode || "-"}.`
+Sumber policy: ${sourceLabel}. Terdeteksi dari APK: ${detectedReleaseLabel}.
+Versi wajib approved: ${Number(policy.minimumApprovedVersionCode) || 0}. Latest release: ${latestReleaseLabel}.`
       : "Policy versi aplikasi belum tersedia."
   );
 }
@@ -312,6 +318,7 @@ async function saveAppReleasePolicy() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        mode: "manual",
         minimumApprovedVersionCode: normalizeNonNegativeInteger(ui.appReleaseMinimumVersionCodeInput.value),
         latestVersionCode: normalizeNonNegativeInteger(ui.appReleaseLatestVersionCodeInput.value),
         latestVersionName: ui.appReleaseLatestVersionNameInput.value.trim(),

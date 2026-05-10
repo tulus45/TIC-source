@@ -27,6 +27,7 @@ const registrationsFile = path.join(dataDir, "registrations.json");
 const submissionsFile = path.join(dataDir, "submissions.json");
 const registrationAreaNeedsFile = path.join(dataDir, "registration_area_needs.json");
 const appReleasePolicyFile = path.join(dataDir, "app_release_policy.json");
+const androidAppBuildFile = path.resolve(rootDir, "..", "app", "build.gradle.kts");
 const bundledSchoolMasterFile = path.join(rootDir, "data", "school_master.json");
 const schoolMasterFile = path.join(dataDir, "school_master.json");
 const adminSessionCookieName = "tic_admin_session";
@@ -162,17 +163,23 @@ async function writeRegistrationAreaNeeds(payload) {
 }
 
 function getAppReleasePolicyDefaults() {
-  const minimumApprovedVersionCode = normalizeNonNegativeInteger(process.env.TIC_MIN_APPROVED_APP_VERSION_CODE);
-  const latestVersionCode = normalizeNonNegativeInteger(
+  const detectedRelease = detectAndroidReleaseVersion();
+  const configuredMinimumApprovedVersionCode = normalizeNonNegativeInteger(process.env.TIC_MIN_APPROVED_APP_VERSION_CODE);
+  const configuredLatestVersionCode = normalizeNonNegativeInteger(
     process.env.TIC_LATEST_APP_VERSION_CODE || process.env.TIC_MIN_APPROVED_APP_VERSION_CODE,
   );
+  const minimumApprovedVersionCode = configuredMinimumApprovedVersionCode || detectedRelease.versionCode;
+  const latestVersionCode = configuredLatestVersionCode || detectedRelease.versionCode;
 
   return {
     minimumApprovedVersionCode,
     latestVersionCode: Math.max(latestVersionCode, minimumApprovedVersionCode),
-    latestVersionName: normalizeString(process.env.TIC_LATEST_APP_VERSION_NAME) || null,
+    latestVersionName: normalizeString(process.env.TIC_LATEST_APP_VERSION_NAME) || detectedRelease.versionName || null,
     updateUrl: normalizeString(process.env.TIC_APP_UPDATE_URL) || null,
     updateMessage: normalizeString(process.env.TIC_APP_UPDATE_MESSAGE) || null,
+    mode: "auto",
+    detectedVersionCode: detectedRelease.versionCode,
+    detectedVersionName: detectedRelease.versionName,
     updatedAt: null,
   };
 }
@@ -194,6 +201,11 @@ function normalizeAppReleasePolicy(payload = {}, fallback = getAppReleasePolicyD
     latestVersionName: normalizeString(source.latestVersionName ?? fallbackSource.latestVersionName) || null,
     updateUrl: normalizeString(source.updateUrl ?? fallbackSource.updateUrl) || null,
     updateMessage: normalizeString(source.updateMessage ?? fallbackSource.updateMessage) || null,
+    mode: resolveAppReleasePolicyMode(source),
+    detectedVersionCode: normalizeNonNegativeInteger(
+      source.detectedVersionCode ?? fallbackSource.detectedVersionCode,
+    ),
+    detectedVersionName: normalizeString(source.detectedVersionName ?? fallbackSource.detectedVersionName) || null,
     updatedAt: normalizeString(source.updatedAt ?? fallbackSource.updatedAt) || null,
   };
 }
@@ -209,13 +221,30 @@ async function readAppReleasePolicy() {
   await ensureStorage();
   const raw = await fs.readFile(appReleasePolicyFile, "utf8");
   const parsed = JSON.parse(raw);
-  return normalizeAppReleasePolicy(parsed);
+  const fallback = getAppReleasePolicyDefaults();
+  const normalizedPolicy = normalizeAppReleasePolicy(parsed, fallback);
+
+  if (normalizedPolicy.mode === "auto") {
+    return {
+      ...normalizeAppReleasePolicy({ mode: "auto" }, fallback),
+      updatedAt: normalizedPolicy.updatedAt,
+    };
+  }
+
+  return normalizedPolicy;
 }
 
 async function writeAppReleasePolicy(payload) {
   await ensureStorage();
+  const fallback = getAppReleasePolicyDefaults();
+  const requestedMode = resolveAppReleasePolicyMode(payload);
   const normalizedPolicy = {
-    ...normalizeAppReleasePolicy(payload),
+    ...normalizeAppReleasePolicy(
+      requestedMode === "auto"
+        ? { mode: "auto" }
+        : { ...payload, mode: "manual" },
+      fallback,
+    ),
     updatedAt: new Date().toISOString(),
   };
   await fs.writeFile(
@@ -224,6 +253,41 @@ async function writeAppReleasePolicy(payload) {
     "utf8",
   );
   return normalizedPolicy;
+}
+
+function detectAndroidReleaseVersion() {
+  try {
+    const raw = fsSync.readFileSync(androidAppBuildFile, "utf8");
+    const versionCodeMatch = raw.match(/val\s+appVersionCode\s*=\s*(\d+)/);
+    const versionNameMatch = raw.match(/val\s+appVersionName\s*=\s*"([^"]+)"/);
+
+    return {
+      versionCode: normalizeNonNegativeInteger(versionCodeMatch?.[1]),
+      versionName: normalizeString(versionNameMatch?.[1]) || null,
+    };
+  } catch {
+    return {
+      versionCode: 0,
+      versionName: null,
+    };
+  }
+}
+
+function isBlankAppReleasePolicyPayload(payload = {}) {
+  return normalizeNonNegativeInteger(payload.minimumApprovedVersionCode) === 0
+    && normalizeNonNegativeInteger(payload.latestVersionCode) === 0
+    && !normalizeString(payload.latestVersionName)
+    && !normalizeString(payload.updateUrl)
+    && !normalizeString(payload.updateMessage);
+}
+
+function resolveAppReleasePolicyMode(payload = {}) {
+  const normalizedMode = normalizeString(payload.mode).toLowerCase();
+  if (normalizedMode === "auto" || normalizedMode === "manual") {
+    return normalizedMode;
+  }
+
+  return isBlankAppReleasePolicyPayload(payload) ? "auto" : "manual";
 }
 
 function findRegistrationForSubmission(items, submissionRecord) {
