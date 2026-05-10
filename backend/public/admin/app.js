@@ -52,6 +52,7 @@ const ui = {
   masterRefreshButton: document.getElementById("masterRefreshButton"),
   masterDriveCheckButton: document.getElementById("masterDriveCheckButton"),
   masterMigrateRegistrationsButton: document.getElementById("masterMigrateRegistrationsButton"),
+  masterAuditRegistrationsButton: document.getElementById("masterAuditRegistrationsButton"),
   masterUploadStatus: document.getElementById("masterUploadStatus"),
   masterDataInfo: document.getElementById("masterDataInfo"),
   masterColumnsValue: document.getElementById("masterColumnsValue"),
@@ -383,6 +384,53 @@ async function runRegistrationMigration() {
   } finally {
     ui.masterMigrateRegistrationsButton.disabled = false;
     ui.masterDriveCheckButton.disabled = false;
+  }
+}
+
+function formatRegistrationAuditMessage(payload) {
+  const summary = payload?.summary || {};
+  const advice = payload?.advice || "";
+  const registrationsFullyOnGoogleDrive = Number(summary.registrationsFullyOnGoogleDrive) || 0;
+  const totalRegistrations = Number(summary.totalRegistrations) || 0;
+  const localRegistrationAssets = Number(summary.localRegistrationAssets) || 0;
+  const localOtherAssets = Number(summary.localOtherAssets) || 0;
+  const unsupportedAssets = Number(summary.unsupportedAssets) || 0;
+  const staleLocalFilesOnDisk = Number(summary.staleLocalFilesOnDisk) || 0;
+
+  return [
+    `Audit selesai: ${registrationsFullyOnGoogleDrive}/${totalRegistrations} registrasi sudah full Google Drive.`,
+    `${localRegistrationAssets} asset registrasi masih menunjuk file lokal.`,
+    `${localOtherAssets + unsupportedAssets} asset perlu dicek manual.`,
+    `${staleLocalFilesOnDisk} file lokal registrasi tidak lagi direferensikan.`,
+    advice,
+  ].join(" ");
+}
+
+async function runRegistrationAudit() {
+  hideError();
+  setMasterUploadState("Mengaudit status registrasi Google Drive...", "saving");
+  ui.masterAuditRegistrationsButton.disabled = true;
+  ui.masterDriveCheckButton.disabled = true;
+  ui.masterMigrateRegistrationsButton.disabled = true;
+
+  try {
+    const { response, payload } = await fetchJson("/api/admin/google-drive/audit-registrations");
+    const message = formatRegistrationAuditMessage(payload);
+
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.details || payload?.error || message);
+    }
+
+    const state = payload?.summary?.safeToDeleteLocalRegistrationFiles ? "saved" : "dirty";
+    setMasterUploadState(message, state);
+  } catch (error) {
+    const message = error.message || "Audit registrasi Google Drive belum berhasil dijalankan.";
+    setMasterUploadState(message, "error");
+    showError(message);
+  } finally {
+    ui.masterAuditRegistrationsButton.disabled = false;
+    ui.masterDriveCheckButton.disabled = false;
+    ui.masterMigrateRegistrationsButton.disabled = false;
   }
 }
 
@@ -2753,6 +2801,7 @@ ui.masterUploadButton.addEventListener("click", uploadMasterDataExcel);
 ui.masterRefreshButton.addEventListener("click", loadMasterDataInfo);
 ui.masterDriveCheckButton.addEventListener("click", runGoogleDriveCheck);
 ui.masterMigrateRegistrationsButton.addEventListener("click", runRegistrationMigration);
+ui.masterAuditRegistrationsButton.addEventListener("click", runRegistrationAudit);
 ui.masterFileInput.addEventListener("change", () => {
   const file = ui.masterFileInput.files?.[0];
   setMasterUploadState(file ? `Siap upload: ${file.name}` : "Belum ada file dipilih.", file ? "dirty" : "");

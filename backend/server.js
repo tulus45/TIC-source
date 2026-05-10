@@ -1298,6 +1298,240 @@ async function migrateRegistrationsToGoogleDrive({ dryRun = true, limit = 0 } = 
   };
 }
 
+function toPortableRelativePath(rootDir, targetPath) {
+  const relativePath = path.relative(rootDir, targetPath);
+  if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    return "";
+  }
+
+  return relativePath.split(path.sep).join("/");
+}
+
+async function listFilesRecursive(rootDir) {
+  const normalizedRootDir = path.resolve(rootDir);
+  let entries = [];
+
+  try {
+    entries = await fs.readdir(normalizedRootDir, { withFileTypes: true });
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+
+  const files = [];
+  for (const entry of entries) {
+    const fullPath = path.join(normalizedRootDir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await listFilesRecursive(fullPath));
+      continue;
+    }
+
+    if (entry.isFile()) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+function classifyRegistrationAssetUrl(assetUrl) {
+  const normalizedAssetUrl = normalizeString(assetUrl);
+  if (!normalizedAssetUrl) {
+    return {
+      status: "empty",
+      assetUrl: null,
+      localPath: "",
+      relativeUploadsPath: "",
+    };
+  }
+
+  if (isGoogleDriveProxyUrl(normalizedAssetUrl)) {
+    return {
+      status: "google-drive",
+      assetUrl: normalizedAssetUrl,
+      localPath: "",
+      relativeUploadsPath: "",
+    };
+  }
+
+  const localPath = resolveUploadsProxyUrlToLocalPath(normalizedAssetUrl);
+  if (!localPath) {
+    return {
+      status: "unsupported",
+      assetUrl: normalizedAssetUrl,
+      localPath: "",
+      relativeUploadsPath: "",
+    };
+  }
+
+  const relativeUploadsPath = toPortableRelativePath(path.resolve(uploadsDir), localPath);
+  if (!relativeUploadsPath.startsWith("registrations/")) {
+    return {
+      status: "local-other",
+      assetUrl: normalizedAssetUrl,
+      localPath,
+      relativeUploadsPath,
+    };
+  }
+
+  return {
+    status: "local-uploads",
+    assetUrl: normalizedAssetUrl,
+    localPath,
+    relativeUploadsPath,
+  };
+}
+
+async function auditRegistrationsGoogleDrive({ detailLimit = 50 } = {}) {
+  const items = await readRegistrations();
+  const registrationsUploadsDir = path.resolve(path.join(uploadsDir, "registrations"));
+  const localFilesOnDisk = await listFilesRecursive(registrationsUploadsDir);
+  const localFilesOnDiskSet = new Set(localFilesOnDisk.map((filePath) => path.resolve(filePath)));
+  const referencedLocalFilesSet = new Set();
+  const normalizedDetailLimit = Math.max(0, Math.trunc(Number(detailLimit) || 0)) || 50;
+  const summary = {
+    totalRegistrations: items.length,
+    scannedAssetFields: 0,
+    registrationsFullyOnGoogleDrive: 0,
+    registrationsWithLocalAssets: 0,
+    registrationsWithIssues: 0,
+    googleDriveAssets: 0,
+    localRegistrationAssets: 0,
+    localRegistrationAssetsMissingFiles: 0,
+    localOtherAssets: 0,
+    unsupportedAssets: 0,
+    emptyAssets: 0,
+    localFilesOnDisk: localFilesOnDisk.length,
+    referencedLocalFilesOnDisk: 0,
+    staleLocalFilesOnDisk: 0,
+    safeToDeleteLocalRegistrationFiles: false,
+    safeToDeleteRenderDisk: false,
+  };
+  const details = [];
+
+  for (const record of items) {
+    const assetEntries = [
+      ["ktpDriveFileId", "ktp"],
+      ["selfieDriveFileId", "selfie"],
+    ];
+    const assetResults = [];
+    let hasLocalAssets = false;
+    let hasIssues = false;
+    let resolvedToGoogleDriveOrEmpty = true;
+
+    for (const [fieldName, assetType] of assetEntries) {
+      summary.scannedAssetFields += 1;
+      const assetInfo = classifyRegistrationAssetUrl(record[fieldName]);
+      const result = {
+        fieldName,
+        assetType,
+        status: assetInfo.status,
+        assetUrl: assetInfo.assetUrl,
+        relativeUploadsPath: assetInfo.relativeUploadsPath || null,
+        fileExists: null,
+      };
+
+      if (assetInfo.status === "empty") {
+        summary.emptyAssets += 1;
+        assetResults.push(result);
+        continue;
+      }
+
+      if (assetInfo.status === "google-drive") {
+        summary.googleDriveAssets += 1;
+        assetResults.push(result);
+        continue;
+      }
+
+      resolvedToGoogleDriveOrEmpty = false;
+
+      if (assetInfo.status === "unsupported") {
+        summary.unsupportedAssets += 1;
+        hasIssues = true;
+        assetResults.push(result);
+        continue;
+      }
+
+      if (assetInfo.status === "local-other") {
+        summary.localOtherAssets += 1;
+        hasIssues = true;
+      } else {
+        summary.localRegistrationAssets += 1;
+        hasLocalAssets = true;
+      }
+
+      let fileExists = false;
+      try {
+        await fs.access(assetInfo.localPath);
+        fileExists = true;
+      } catch {
+        fileExists = false;
+      }
+
+      result.fileExists = fileExists;
+      if (fileExists) {
+        const normalizedLocalPath = path.resolve(assetInfo.localPath);
+        if (localFilesOnDiskSet.has(normalizedLocalPath)) {
+          referencedLocalFilesSet.add(normalizedLocalPath);
+        }
+      } else if (assetInfo.status === "local-uploads") {
+        summary.localRegistrationAssetsMissingFiles += 1;
+        hasIssues = true;
+      }
+
+      assetResults.push(result);
+    }
+
+    if (resolvedToGoogleDriveOrEmpty) {
+      summary.registrationsFullyOnGoogleDrive += 1;
+    }
+
+    if (hasLocalAssets) {
+      summary.registrationsWithLocalAssets += 1;
+    }
+
+    if (hasLocalAssets || hasIssues) {
+      summary.registrationsWithIssues += 1;
+    }
+
+    if ((hasLocalAssets || hasIssues) && details.length < normalizedDetailLimit) {
+      details.push({
+        registrationId: record.registrationId,
+        uid: record.uid,
+        nama: record.nama || null,
+        gmail: record.gmail || null,
+        assets: assetResults.filter((asset) => asset.status !== "google-drive" && asset.status !== "empty"),
+      });
+    }
+  }
+
+  summary.referencedLocalFilesOnDisk = referencedLocalFilesSet.size;
+  summary.staleLocalFilesOnDisk = localFilesOnDisk.filter((filePath) => !referencedLocalFilesSet.has(path.resolve(filePath))).length;
+  summary.safeToDeleteLocalRegistrationFiles = Boolean(
+    summary.localRegistrationAssets === 0
+      && summary.localOtherAssets === 0
+      && summary.unsupportedAssets === 0,
+  );
+
+  return {
+    ok: true,
+    summary,
+    advice: summary.safeToDeleteLocalRegistrationFiles
+      ? "Semua URL asset registrasi yang terisi sudah mengarah ke Google Drive. Folder uploads/registrations aman dibersihkan, tetapi disk Render tetap jangan dihapus karena masih dipakai file JSON dan kemungkinan data submission."
+      : "Masih ada URL asset registrasi yang belum sepenuhnya aman untuk cleanup. Jangan hapus folder uploads/registrations dulu.",
+    filesystem: {
+      registrationsUploadsDir,
+      sampleStaleLocalFiles: localFilesOnDisk
+        .filter((filePath) => !referencedLocalFilesSet.has(path.resolve(filePath)))
+        .slice(0, 20)
+        .map((filePath) => toPortableRelativePath(registrationsUploadsDir, filePath) || path.basename(filePath)),
+    },
+    items: details,
+  };
+}
+
 function buildRegistrationRecord(body) {
   const now = new Date().toISOString();
 
@@ -2031,6 +2265,21 @@ async function handleApi(req, res, url) {
       sendJson(res, statusCode, {
         ok: false,
         error: "Migrasi registrasi ke Google Drive gagal dijalankan.",
+        details,
+      });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/google-drive/audit-registrations") {
+    try {
+      const result = await auditRegistrationsGoogleDrive();
+      sendJson(res, 200, result);
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      sendJson(res, 500, {
+        ok: false,
+        error: "Audit registrasi Google Drive gagal dijalankan.",
         details,
       });
     }

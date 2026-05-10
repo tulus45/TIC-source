@@ -120,6 +120,23 @@ Catatan:
 - file lokal lama **tidak dihapus otomatis**, jadi aman untuk verifikasi dulu
 - record yang sudah memakai URL `/uploads/google-drive/...` akan dilewati
 
+Untuk audit setelah migrasi:
+
+```http
+GET /api/admin/google-drive/audit-registrations
+```
+
+Endpoint audit ini akan merangkum:
+
+- berapa asset registrasi yang sudah memakai URL Google Drive
+- apakah masih ada field registrasi yang menunjuk file lokal Render
+- berapa file lokal tersisa di `uploads/registrations`
+- apakah folder `uploads/registrations` aman dibersihkan
+
+Catatan:
+
+- meskipun audit menyatakan folder `uploads/registrations` aman dibersihkan, **disk Render tetap belum boleh dihapus** karena masih dipakai `registrations.json`, `submissions.json`, `school_master.json`, dan `registration_area_needs.json`
+
 ## Cara Menjalankan
 
 ```bash
