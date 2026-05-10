@@ -4,6 +4,7 @@ import android.app.Application
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.room.Room
+import com.timindonesiacerdas.ticcollect.BuildConfig
 import com.timindonesiacerdas.ticcollect.data.local.db.RegistrationDraftDao
 import com.timindonesiacerdas.ticcollect.data.local.db.SessionDao
 import com.timindonesiacerdas.ticcollect.data.local.db.SessionEntity
@@ -12,6 +13,8 @@ import com.timindonesiacerdas.ticcollect.data.local.db.toAuthenticatedUser
 import com.timindonesiacerdas.ticcollect.data.local.db.toEntity
 import com.timindonesiacerdas.ticcollect.data.local.db.toLocalDraft
 import com.timindonesiacerdas.ticcollect.data.local.db.toUserProfile
+import com.timindonesiacerdas.ticcollect.data.model.AppAccessState
+import com.timindonesiacerdas.ticcollect.data.model.AppReleasePolicy
 import com.timindonesiacerdas.ticcollect.data.model.AuthenticatedUser
 import com.timindonesiacerdas.ticcollect.data.model.LocalRegistrationDraft
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationDraft
@@ -79,6 +82,7 @@ object InMemorySessionStore {
             _session.value = SessionState(
                 isAuthenticated = true,
                 user = buildLocalIdentity(),
+                appAccess = buildCurrentAppAccessState(),
             )
             _submissions.value = loadStoredSubmissions()
             bindPersistentFlows()
@@ -92,6 +96,8 @@ object InMemorySessionStore {
         _session.value = _session.value.copy(
             isAuthenticated = true,
             user = localIdentity,
+            appAccess = _session.value.appAccess.takeIf { it.currentVersionCode > 0 }
+                ?: buildCurrentAppAccessState(),
         )
 
         storeScope.launch {
@@ -145,6 +151,8 @@ object InMemorySessionStore {
             isAuthenticated = true,
             user = localIdentity,
             profile = _session.value.profile?.takeIf { it.uid == localIdentity.uid },
+            appAccess = _session.value.appAccess.takeIf { it.currentVersionCode > 0 }
+                ?: buildCurrentAppAccessState(),
         )
     }
 
@@ -205,10 +213,12 @@ object InMemorySessionStore {
         ensureInitialized()
         val user = session.value.user ?: return null
 
-        val remoteProfile = TicBackendHttpClient.getCurrentUser(
+        val currentUser = TicBackendHttpClient.getCurrentUser(
             uid = user.uid,
             gmail = user.gmail,
         )
+        val remoteProfile = currentUser.profile
+        val appAccess = buildCurrentAppAccessState(currentUser.appReleasePolicy)
 
         val currentDraft = registrationDraftDao.getByUid(user.uid)?.toLocalDraft()
         val mergedDraft = LocalRegistrationDraft(
@@ -237,6 +247,7 @@ object InMemorySessionStore {
             updatedAt = remoteProfile.updatedAt ?: TimeFormatter.nowStorage(),
         )
         registrationDraftDao.upsert(mergedDraft.toEntity())
+        _session.value = _session.value.copy(appAccess = appAccess)
         return remoteProfile
     }
 
@@ -342,6 +353,8 @@ object InMemorySessionStore {
                         isAuthenticated = sessionEntity.isAuthenticated,
                         user = user,
                         profile = draftEntity?.toUserProfile(),
+                        appAccess = _session.value.appAccess.takeIf { it.currentVersionCode > 0 }
+                            ?: buildCurrentAppAccessState(),
                     )
                 }
             }
@@ -360,6 +373,14 @@ object InMemorySessionStore {
     ): RegistrationStatus = runCatching {
         RegistrationStatus.valueOf(value.trim().uppercase())
     }.getOrDefault(default)
+
+    private fun buildCurrentAppAccessState(
+        releasePolicy: AppReleasePolicy = AppReleasePolicy(),
+    ): AppAccessState = AppAccessState(
+        currentVersionCode = BuildConfig.APP_VERSION_CODE,
+        currentVersionName = BuildConfig.APP_VERSION_NAME,
+        releasePolicy = releasePolicy,
+    )
 
     private fun replaceSubmission(record: SubmissionRecord) {
         upsertSubmission(record)

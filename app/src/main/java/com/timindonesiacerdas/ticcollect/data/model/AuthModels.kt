@@ -40,8 +40,28 @@ data class UserProfile(
     val updatedAt: String? = null,
 )
 
+data class AppReleasePolicy(
+    val minimumApprovedVersionCode: Int = 0,
+    val latestVersionCode: Int = 0,
+    val latestVersionName: String? = null,
+    val updateUrl: String? = null,
+    val updateMessage: String? = null,
+    val updatedAt: String? = null,
+)
+
+data class AppAccessState(
+    val currentVersionCode: Int = 0,
+    val currentVersionName: String = "",
+    val releasePolicy: AppReleasePolicy = AppReleasePolicy(),
+) {
+    val requiresAppUpdate: Boolean
+        get() = releasePolicy.minimumApprovedVersionCode > 0 &&
+            currentVersionCode < releasePolicy.minimumApprovedVersionCode
+}
+
 data class SessionState(
     val isAuthenticated: Boolean = false,
     val user: AuthenticatedUser? = null,
     val profile: UserProfile? = null,
+    val appAccess: AppAccessState = AppAccessState(),
 )

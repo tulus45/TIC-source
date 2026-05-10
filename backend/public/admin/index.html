@@ -179,6 +179,45 @@
 
         <div id="masterUploadStatus" class="master-panel__status">Belum ada file dipilih.</div>
         <div id="masterDataInfo" class="master-panel__info">Memuat info master data...</div>
+
+        <div class="release-policy-card" aria-label="Aturan versi APK untuk user approved">
+          <div class="master-panel__intro">
+            <div class="hero__badge hero__badge--light">Gate APK Approved</div>
+            <h2>Batasi Home hanya untuk APK release terbaru</h2>
+            <p>
+              User dengan status approved tetap harus memakai APK versi yang Anda tentukan di sini sebelum menu utama dibuka.
+            </p>
+          </div>
+
+          <div class="release-policy-grid">
+            <label class="release-policy-field">
+              <span>Version Code Wajib</span>
+              <input id="appReleaseMinimumVersionCodeInput" type="number" min="0" step="1" inputmode="numeric" />
+            </label>
+            <label class="release-policy-field">
+              <span>Version Code Latest</span>
+              <input id="appReleaseLatestVersionCodeInput" type="number" min="0" step="1" inputmode="numeric" />
+            </label>
+            <label class="release-policy-field">
+              <span>Label Release</span>
+              <input id="appReleaseLatestVersionNameInput" type="text" placeholder="Contoh: 0.2.0" />
+            </label>
+            <label class="release-policy-field">
+              <span>Link Update APK</span>
+              <input id="appReleaseUpdateUrlInput" type="url" placeholder="https://..." />
+            </label>
+            <label class="release-policy-field release-policy-field--full">
+              <span>Pesan Update</span>
+              <textarea id="appReleaseUpdateMessageInput" rows="3" placeholder="Contoh: Silakan update APK dulu sebelum masuk ke menu utama."></textarea>
+            </label>
+          </div>
+
+          <div class="release-policy-actions">
+            <button id="appReleaseSaveButton" class="button button--primary" type="button">Simpan Aturan APK</button>
+            <div id="appReleasePolicyStatus" class="master-panel__status">Memuat policy versi aplikasi...</div>
+          </div>
+          <div id="appReleasePolicyInfo" class="master-panel__info">Policy versi aplikasi belum dimuat.</div>
+        </div>
       </section>
 
       <section id="detailPanel" class="table-panel hidden" role="tabpanel">

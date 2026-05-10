@@ -26,6 +26,7 @@ const uploadsDir = resolveRuntimePath(process.env.TIC_UPLOADS_DIR, path.join(sto
 const registrationsFile = path.join(dataDir, "registrations.json");
 const submissionsFile = path.join(dataDir, "submissions.json");
 const registrationAreaNeedsFile = path.join(dataDir, "registration_area_needs.json");
+const appReleasePolicyFile = path.join(dataDir, "app_release_policy.json");
 const bundledSchoolMasterFile = path.join(rootDir, "data", "school_master.json");
 const schoolMasterFile = path.join(dataDir, "school_master.json");
 const adminSessionCookieName = "tic_admin_session";
@@ -65,6 +66,16 @@ async function ensureStorage() {
     await fs.access(registrationAreaNeedsFile);
   } catch {
     await fs.writeFile(registrationAreaNeedsFile, "{}\n", "utf8");
+  }
+
+  try {
+    await fs.access(appReleasePolicyFile);
+  } catch {
+    await fs.writeFile(
+      appReleasePolicyFile,
+      `${JSON.stringify(buildDefaultAppReleasePolicy(), null, 2)}\n`,
+      "utf8",
+    );
   }
 
   try {
@@ -147,6 +158,71 @@ async function writeRegistrationAreaNeeds(payload) {
     `${JSON.stringify(payload, null, 2)}\n`,
     "utf8",
   );
+}
+
+function getAppReleasePolicyDefaults() {
+  const minimumApprovedVersionCode = normalizeNonNegativeInteger(process.env.TIC_MIN_APPROVED_APP_VERSION_CODE);
+  const latestVersionCode = normalizeNonNegativeInteger(
+    process.env.TIC_LATEST_APP_VERSION_CODE || process.env.TIC_MIN_APPROVED_APP_VERSION_CODE,
+  );
+
+  return {
+    minimumApprovedVersionCode,
+    latestVersionCode: Math.max(latestVersionCode, minimumApprovedVersionCode),
+    latestVersionName: normalizeString(process.env.TIC_LATEST_APP_VERSION_NAME) || null,
+    updateUrl: normalizeString(process.env.TIC_APP_UPDATE_URL) || null,
+    updateMessage: normalizeString(process.env.TIC_APP_UPDATE_MESSAGE) || null,
+    updatedAt: null,
+  };
+}
+
+function normalizeAppReleasePolicy(payload = {}, fallback = getAppReleasePolicyDefaults()) {
+  const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  const fallbackSource = fallback && typeof fallback === "object" && !Array.isArray(fallback) ? fallback : {};
+  const minimumApprovedVersionCode = normalizeNonNegativeInteger(
+    source.minimumApprovedVersionCode ?? fallbackSource.minimumApprovedVersionCode,
+  );
+  const latestVersionCode = Math.max(
+    normalizeNonNegativeInteger(source.latestVersionCode ?? fallbackSource.latestVersionCode),
+    minimumApprovedVersionCode,
+  );
+
+  return {
+    minimumApprovedVersionCode,
+    latestVersionCode,
+    latestVersionName: normalizeString(source.latestVersionName ?? fallbackSource.latestVersionName) || null,
+    updateUrl: normalizeString(source.updateUrl ?? fallbackSource.updateUrl) || null,
+    updateMessage: normalizeString(source.updateMessage ?? fallbackSource.updateMessage) || null,
+    updatedAt: normalizeString(source.updatedAt ?? fallbackSource.updatedAt) || null,
+  };
+}
+
+function buildDefaultAppReleasePolicy() {
+  return {
+    ...normalizeAppReleasePolicy(getAppReleasePolicyDefaults()),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function readAppReleasePolicy() {
+  await ensureStorage();
+  const raw = await fs.readFile(appReleasePolicyFile, "utf8");
+  const parsed = JSON.parse(raw);
+  return normalizeAppReleasePolicy(parsed);
+}
+
+async function writeAppReleasePolicy(payload) {
+  await ensureStorage();
+  const normalizedPolicy = {
+    ...normalizeAppReleasePolicy(payload),
+    updatedAt: new Date().toISOString(),
+  };
+  await fs.writeFile(
+    appReleasePolicyFile,
+    `${JSON.stringify(normalizedPolicy, null, 2)}\n`,
+    "utf8",
+  );
+  return normalizedPolicy;
 }
 
 function findRegistrationForSubmission(items, submissionRecord) {
@@ -2084,7 +2160,10 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/users/me") {
-    const items = await readRegistrations();
+    const [items, appReleasePolicy] = await Promise.all([
+      readRegistrations(),
+      readAppReleasePolicy(),
+    ]);
     const record = findRegistration(items, url.searchParams);
 
     if (!record) {
@@ -2092,7 +2171,10 @@ async function handleApi(req, res, url) {
       return;
     }
 
-    sendJson(res, 200, toUserProfile(record));
+    sendJson(res, 200, {
+      ...toUserProfile(record),
+      appReleasePolicy,
+    });
     return;
   }
 
@@ -2152,6 +2234,19 @@ async function handleApi(req, res, url) {
       sendJson(res, 500, {
         error: `Gagal menyimpan submission. ${details}`,
         details,
+      });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/app-release-policy") {
+    try {
+      const policy = await readAppReleasePolicy();
+      sendJson(res, 200, policy);
+    } catch (error) {
+      sendJson(res, 500, {
+        error: "Policy versi aplikasi belum bisa dibaca.",
+        details: error instanceof Error ? error.message : String(error),
       });
     }
     return;
@@ -2350,6 +2445,39 @@ async function handleApi(req, res, url) {
     } catch (error) {
       sendJson(res, 422, {
         error: "File Excel belum bisa diproses sebagai master data sekolah.",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/app-release-policy") {
+    try {
+      const policy = await readAppReleasePolicy();
+      sendJson(res, 200, policy);
+    } catch (error) {
+      sendJson(res, 500, {
+        error: "Policy versi aplikasi belum bisa dibaca.",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/app-release-policy") {
+    let body = {};
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      body = {};
+    }
+
+    try {
+      const savedPolicy = await writeAppReleasePolicy(body);
+      sendJson(res, 200, savedPolicy);
+    } catch (error) {
+      sendJson(res, 500, {
+        error: "Policy versi aplikasi belum bisa disimpan.",
         details: error instanceof Error ? error.message : String(error),
       });
     }

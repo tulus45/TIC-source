@@ -7,6 +7,8 @@ plugins {
 val backendBaseUrl = providers.gradleProperty("ticBackendBaseUrl")
     .orElse("https://tic-registration-backend.onrender.com")
     .get()
+val appVersionCode = 1
+val appVersionName = "0.1.0"
 
 android {
     namespace = "com.timindonesiacerdas.ticcollect"
@@ -16,9 +18,11 @@ android {
         applicationId = "com.timindonesiacerdas.ticcollect"
         minSdk = 23
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
         buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
+        buildConfigField("int", "APP_VERSION_CODE", appVersionCode.toString())
+        buildConfigField("String", "APP_VERSION_NAME", "\"$appVersionName\"")
         manifestPlaceholders["usesCleartextTraffic"] = "true"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -85,7 +89,6 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
-    implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     implementation("androidx.camera:camera-core:$cameraXVersion")

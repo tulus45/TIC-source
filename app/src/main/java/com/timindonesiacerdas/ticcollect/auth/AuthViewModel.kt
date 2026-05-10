@@ -72,7 +72,11 @@ class AuthViewModel : ViewModel() {
             return when (status) {
                 RegistrationStatus.NOT_REGISTERED -> TicRoutes.Welcome
                 RegistrationStatus.PENDING -> TicRoutes.WaitingApproval
-                RegistrationStatus.APPROVED -> TicRoutes.Home
+                RegistrationStatus.APPROVED -> if (session.appAccess.requiresAppUpdate) {
+                    TicRoutes.UpdateRequired
+                } else {
+                    TicRoutes.Home
+                }
                 RegistrationStatus.REJECTED -> TicRoutes.Rejected
                 RegistrationStatus.SUSPENDED -> TicRoutes.Suspended
             }

@@ -946,6 +946,63 @@ a {
   line-height: 1.6;
 }
 
+.release-policy-card {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface-strong);
+}
+
+.release-policy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.release-policy-field {
+  display: grid;
+  gap: 8px;
+}
+
+.release-policy-field--full {
+  grid-column: 1 / -1;
+}
+
+.release-policy-field span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.release-policy-field input,
+.release-policy-field textarea {
+  width: 100%;
+  min-height: 46px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+
+.release-policy-field textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.release-policy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.release-policy-actions .master-panel__status {
+  margin: 0;
+  flex: 1 1 320px;
+}
+
 .master-panel__status[data-state="dirty"],
 .note-status[data-state="dirty"] {
   color: #9c5d0d;

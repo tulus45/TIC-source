@@ -53,6 +53,14 @@ const ui = {
   masterDriveCheckButton: document.getElementById("masterDriveCheckButton"),
   masterMigrateRegistrationsButton: document.getElementById("masterMigrateRegistrationsButton"),
   masterAuditRegistrationsButton: document.getElementById("masterAuditRegistrationsButton"),
+  appReleaseMinimumVersionCodeInput: document.getElementById("appReleaseMinimumVersionCodeInput"),
+  appReleaseLatestVersionCodeInput: document.getElementById("appReleaseLatestVersionCodeInput"),
+  appReleaseLatestVersionNameInput: document.getElementById("appReleaseLatestVersionNameInput"),
+  appReleaseUpdateUrlInput: document.getElementById("appReleaseUpdateUrlInput"),
+  appReleaseUpdateMessageInput: document.getElementById("appReleaseUpdateMessageInput"),
+  appReleaseSaveButton: document.getElementById("appReleaseSaveButton"),
+  appReleasePolicyStatus: document.getElementById("appReleasePolicyStatus"),
+  appReleasePolicyInfo: document.getElementById("appReleasePolicyInfo"),
   masterUploadStatus: document.getElementById("masterUploadStatus"),
   masterDataInfo: document.getElementById("masterDataInfo"),
   masterColumnsValue: document.getElementById("masterColumnsValue"),
@@ -110,6 +118,7 @@ let visibleUploadItems = [];
 let breakdownRows = [];
 let activeTab = "summary-registrations";
 let currentMasterData = null;
+let currentAppReleasePolicy = null;
 let selectedDrawerRecordId = null;
 let selectedDrawerType = "";
 let lastSyncAt = "";
@@ -242,6 +251,86 @@ async function loadMasterDataInfo() {
     refreshToolbarSummary();
     updateDashboardMetrics();
     showError(error.message || "Belum bisa memuat info master data.");
+  }
+}
+
+function setAppReleasePolicyState(message, state = "") {
+  ui.appReleasePolicyStatus.textContent = message;
+  ui.appReleasePolicyStatus.dataset.state = state;
+}
+
+function renderAppReleasePolicy(payload, errorMessage = "") {
+  const policy = payload || {};
+  currentAppReleasePolicy = payload || null;
+  ui.appReleaseMinimumVersionCodeInput.value = String(Number(policy.minimumApprovedVersionCode) || 0);
+  ui.appReleaseLatestVersionCodeInput.value = String(Number(policy.latestVersionCode) || 0);
+  ui.appReleaseLatestVersionNameInput.value = policy.latestVersionName || "";
+  ui.appReleaseUpdateUrlInput.value = policy.updateUrl || "";
+  ui.appReleaseUpdateMessageInput.value = policy.updateMessage || "";
+  ui.appReleasePolicyInfo.textContent = errorMessage || (
+    payload
+      ? `Policy aktif diperbarui ${policy.updatedAt ? formatDate(policy.updatedAt) : "-"}.
+Versi wajib approved: ${Number(policy.minimumApprovedVersionCode) || 0}. Latest release: ${policy.latestVersionName || policy.latestVersionCode || "-"}.`
+      : "Policy versi aplikasi belum tersedia."
+  );
+}
+
+async function loadAppReleasePolicy() {
+  try {
+    const { response, payload } = await fetchJson("/api/admin/app-release-policy");
+
+    if (!response.ok) {
+      throw new Error(payload.error || "Gagal memuat policy versi aplikasi.");
+    }
+
+    renderAppReleasePolicy(payload);
+    setAppReleasePolicyState("Policy versi aplikasi berhasil dimuat.", "saved");
+  } catch (error) {
+    currentAppReleasePolicy = null;
+    renderAppReleasePolicy(null, error.message || "Belum bisa memuat policy versi aplikasi.");
+    setAppReleasePolicyState(error.message || "Belum bisa memuat policy versi aplikasi.", "error");
+    showError(error.message || "Belum bisa memuat policy versi aplikasi.");
+  }
+}
+
+async function loadMasterPanelData() {
+  await Promise.all([
+    loadMasterDataInfo(),
+    loadAppReleasePolicy(),
+  ]);
+}
+
+async function saveAppReleasePolicy() {
+  hideError();
+  setAppReleasePolicyState("Menyimpan policy versi aplikasi...", "saving");
+  ui.appReleaseSaveButton.disabled = true;
+
+  try {
+    const { response, payload } = await fetchJson("/api/admin/app-release-policy", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        minimumApprovedVersionCode: normalizeNonNegativeInteger(ui.appReleaseMinimumVersionCodeInput.value),
+        latestVersionCode: normalizeNonNegativeInteger(ui.appReleaseLatestVersionCodeInput.value),
+        latestVersionName: ui.appReleaseLatestVersionNameInput.value.trim(),
+        updateUrl: ui.appReleaseUpdateUrlInput.value.trim(),
+        updateMessage: ui.appReleaseUpdateMessageInput.value.trim(),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(payload.error || payload.details || "Policy versi aplikasi belum berhasil disimpan.");
+    }
+
+    renderAppReleasePolicy(payload);
+    setAppReleasePolicyState("Policy versi aplikasi berhasil disimpan.", "saved");
+  } catch (error) {
+    setAppReleasePolicyState(error.message || "Policy versi aplikasi belum berhasil disimpan.", "error");
+    showError(error.message || "Policy versi aplikasi belum berhasil disimpan.");
+  } finally {
+    ui.appReleaseSaveButton.disabled = false;
   }
 }
 
@@ -2798,13 +2887,23 @@ ui.rawKabupatenFilter.addEventListener("change", () => renderSubmissionRows(uplo
 ui.rawStatusFilter.addEventListener("change", () => renderSubmissionRows(uploadItems));
 ui.rawSearchInput.addEventListener("input", () => renderSubmissionRows(uploadItems));
 ui.masterUploadButton.addEventListener("click", uploadMasterDataExcel);
-ui.masterRefreshButton.addEventListener("click", loadMasterDataInfo);
+ui.masterRefreshButton.addEventListener("click", loadMasterPanelData);
 ui.masterDriveCheckButton.addEventListener("click", runGoogleDriveCheck);
 ui.masterMigrateRegistrationsButton.addEventListener("click", runRegistrationMigration);
 ui.masterAuditRegistrationsButton.addEventListener("click", runRegistrationAudit);
+ui.appReleaseSaveButton.addEventListener("click", saveAppReleasePolicy);
 ui.masterFileInput.addEventListener("change", () => {
   const file = ui.masterFileInput.files?.[0];
   setMasterUploadState(file ? `Siap upload: ${file.name}` : "Belum ada file dipilih.", file ? "dirty" : "");
+});
+[
+  ui.appReleaseMinimumVersionCodeInput,
+  ui.appReleaseLatestVersionCodeInput,
+  ui.appReleaseLatestVersionNameInput,
+  ui.appReleaseUpdateUrlInput,
+  ui.appReleaseUpdateMessageInput,
+].forEach((input) => {
+  input.addEventListener("input", () => setAppReleasePolicyState("Perubahan policy belum disimpan.", "dirty"));
 });
 ui.detailDrawerCloseButton.addEventListener("click", closeRegistrationDrawer);
 ui.detailDrawerBackdrop.addEventListener("click", closeRegistrationDrawer);
@@ -2835,6 +2934,6 @@ document.addEventListener("keydown", (event) => {
 
 setDrawerActionAvailability(null);
 setActiveTab(activeTab);
-loadMasterDataInfo();
+loadMasterPanelData();
 loadRegistrations();
 loadSubmissions();

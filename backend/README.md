@@ -46,9 +46,12 @@ Kalau variabel itu tidak diisi, backend tetap memakai folder lokal seperti sekar
 - `POST /api/admin/master-data/schools/upload` untuk update master data lokasi dari file Excel
 - `GET /api/registrations/status` untuk membaca status approval
 - `GET /api/users/me` untuk membaca profil registrasi berdasarkan `uid`, `gmail`, atau `registrationId`
+- `GET /api/app-release-policy` untuk membaca policy versi APK aktif
 - `GET /api/admin/registrations` untuk daftar review di web admin
 - `POST /api/admin/registrations/{id}/approve`
 - `POST /api/admin/registrations/{id}/reject`
+- `GET /api/admin/app-release-policy` untuk membaca setting versi APK wajib
+- `POST /api/admin/app-release-policy` untuk menyimpan setting versi APK wajib
 - halaman admin di `/admin`
 
 Catatan:
@@ -90,6 +93,25 @@ Catatan penting:
 - admin web tetap membuka preview lewat URL backend, jadi file Google Drive tidak perlu dibuka publik satu per satu
 - persistent disk Render masih dipakai untuk file JSON data (`registrations.json`, `submissions.json`, `school_master.json`), tetapi foto tidak lagi menumpuk di disk lokal
 - di Render, Secret File tersedia di path `/etc/secrets/<filename>` menurut dokumentasi resmi Render
+
+## Gate Versi APK
+
+Backend sekarang bisa membatasi akses Home hanya untuk user yang:
+
+- status registrasinya `APPROVED`
+- dan APK yang dipakai sudah memenuhi `minimumApprovedVersionCode`
+
+Policy ini disimpan persisten di file runtime `app_release_policy.json`, sehingga bisa diubah dari admin panel tanpa perlu edit source code.
+
+Field utama policy:
+
+- `minimumApprovedVersionCode`: versi minimum agar user approved boleh masuk Home
+- `latestVersionCode`: versi release terbaru yang sedang Anda edarkan
+- `latestVersionName`: label release, misalnya `0.2.0`
+- `updateUrl`: link download/update APK
+- `updateMessage`: pesan yang tampil di APK saat update diwajibkan
+
+Setelah Anda upload APK release baru, cukup buka `/admin` lalu update policy pada panel **Gate APK Approved**.
 
 Kalau Anda punya data registrasi lama yang masih menyimpan KTP/selfie di disk lokal Render, backend ini juga menyediakan endpoint migrasi:
 

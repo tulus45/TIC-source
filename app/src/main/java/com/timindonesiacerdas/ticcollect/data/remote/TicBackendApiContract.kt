@@ -3,6 +3,7 @@ package com.timindonesiacerdas.ticcollect.data.remote
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationDraft
 import com.timindonesiacerdas.ticcollect.data.model.SubmissionRecord
 import com.timindonesiacerdas.ticcollect.data.model.UserProfile
+import com.timindonesiacerdas.ticcollect.data.model.AppReleasePolicy
 
 object TicApiRoutes {
     const val verifyAuth = "/api/auth/verify"
@@ -23,6 +24,11 @@ data class VerifyAuthResponse(
     val uid: String,
     val gmail: String,
     val displayName: String,
+)
+
+data class CurrentUserResponse(
+    val profile: UserProfile,
+    val appReleasePolicy: AppReleasePolicy = AppReleasePolicy(),
 )
 
 data class RegistrationUploadResponse(
@@ -69,7 +75,7 @@ interface TicBackendApiContract {
         uid: String? = null,
         gmail: String? = null,
         registrationId: String? = null,
-    ): UserProfile
+    ): CurrentUserResponse
     suspend fun getSchoolMasterData(): SchoolMasterDataResponse
     suspend fun getRegistrationStatus(
         uid: String? = null,

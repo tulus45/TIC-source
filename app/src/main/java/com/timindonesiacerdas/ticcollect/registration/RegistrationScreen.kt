@@ -126,17 +126,6 @@ fun RegistrationScreen(
                             label = "Foto KTP",
                             filePath = uiState.ktpLocalPath,
                         )
-                        if (!uiState.ktpOcrMessage.isNullOrBlank()) {
-                            Text(
-                                text = uiState.ktpOcrMessage.orEmpty(),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (uiState.isKtpOcrProcessing) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f)
-                                },
-                            )
-                        }
                         TicPrimaryButton(
                             text = "Lanjut ke Foto Selfie",
                             onClick = { currentStep = RegistrationStep.SelfiePhoto },
@@ -169,13 +158,6 @@ fun RegistrationScreen(
 
                 RegistrationStep.IdentityForm -> {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (!uiState.ktpOcrMessage.isNullOrBlank()) {
-                            Text(
-                                text = uiState.ktpOcrMessage.orEmpty(),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
-                            )
-                        }
                         OutlinedTextField(
                             value = uiState.gmail,
                             onValueChange = onGmailChanged,

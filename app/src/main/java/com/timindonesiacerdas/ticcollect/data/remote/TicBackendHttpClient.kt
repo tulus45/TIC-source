@@ -3,6 +3,7 @@ package com.timindonesiacerdas.ticcollect.data.remote
 import android.util.Base64
 import com.timindonesiacerdas.ticcollect.BuildConfig
 import com.timindonesiacerdas.ticcollect.data.local.InMemorySessionStore
+import com.timindonesiacerdas.ticcollect.data.model.AppReleasePolicy
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationDraft
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
 import com.timindonesiacerdas.ticcollect.data.model.SubmissionRecord
@@ -49,35 +50,38 @@ object TicBackendHttpClient : TicBackendApiContract {
         uid: String?,
         gmail: String?,
         registrationId: String?,
-    ): UserProfile {
+    ): CurrentUserResponse {
         val payload = requestJson(
             method = "GET",
             path = TicApiRoutes.currentUser,
             query = buildQuery(uid, gmail, registrationId),
         )
 
-        return UserProfile(
-            uid = payload.optString("uid"),
-            gmail = payload.optString("gmail"),
-            displayName = payload.optString("displayName"),
-            nik = payload.optStringOrNull("nik"),
-            nama = payload.optStringOrNull("nama"),
-            alamat = payload.optStringOrNull("alamat"),
-            rtRw = payload.optStringOrNull("rtRw"),
-            kelDesa = payload.optStringOrNull("kelDesa"),
-            kecamatan = payload.optStringOrNull("kecamatan"),
-            kabupaten = payload.optStringOrNull("kabupaten"),
-            noHp = payload.optStringOrNull("noHp"),
-            noRekening = payload.optStringOrNull("noRekening"),
-            namaBank = payload.optStringOrNull("namaBank"),
-            namaPemilik = payload.optStringOrNull("namaPemilik"),
-            areaKerja = payload.optStringOrNull("areaKerja"),
-            status = payload.optRegistrationStatus("status"),
-            rejectionReason = payload.optStringOrNull("rejectionReason"),
-            ktpDriveFileId = payload.optStringOrNull("ktpDriveFileId"),
-            selfieDriveFileId = payload.optStringOrNull("selfieDriveFileId"),
-            createdAt = payload.optStringOrNull("createdAt"),
-            updatedAt = payload.optStringOrNull("updatedAt"),
+        return CurrentUserResponse(
+            profile = UserProfile(
+                uid = payload.optString("uid"),
+                gmail = payload.optString("gmail"),
+                displayName = payload.optString("displayName"),
+                nik = payload.optStringOrNull("nik"),
+                nama = payload.optStringOrNull("nama"),
+                alamat = payload.optStringOrNull("alamat"),
+                rtRw = payload.optStringOrNull("rtRw"),
+                kelDesa = payload.optStringOrNull("kelDesa"),
+                kecamatan = payload.optStringOrNull("kecamatan"),
+                kabupaten = payload.optStringOrNull("kabupaten"),
+                noHp = payload.optStringOrNull("noHp"),
+                noRekening = payload.optStringOrNull("noRekening"),
+                namaBank = payload.optStringOrNull("namaBank"),
+                namaPemilik = payload.optStringOrNull("namaPemilik"),
+                areaKerja = payload.optStringOrNull("areaKerja"),
+                status = payload.optRegistrationStatus("status"),
+                rejectionReason = payload.optStringOrNull("rejectionReason"),
+                ktpDriveFileId = payload.optStringOrNull("ktpDriveFileId"),
+                selfieDriveFileId = payload.optStringOrNull("selfieDriveFileId"),
+                createdAt = payload.optStringOrNull("createdAt"),
+                updatedAt = payload.optStringOrNull("updatedAt"),
+            ),
+            appReleasePolicy = payload.optAppReleasePolicy("appReleasePolicy"),
         )
     }
 
@@ -542,5 +546,17 @@ object TicBackendHttpClient : TicBackendApiContract {
     private fun JSONObject.optStringOrNull(key: String): String? {
         if (isNull(key)) return null
         return optString(key).trim().ifBlank { null }
+    }
+
+    private fun JSONObject.optAppReleasePolicy(key: String): AppReleasePolicy {
+        val policy = optJSONObject(key) ?: return AppReleasePolicy()
+        return AppReleasePolicy(
+            minimumApprovedVersionCode = policy.optInt("minimumApprovedVersionCode", 0).coerceAtLeast(0),
+            latestVersionCode = policy.optInt("latestVersionCode", 0).coerceAtLeast(0),
+            latestVersionName = policy.optStringOrNull("latestVersionName"),
+            updateUrl = policy.optStringOrNull("updateUrl"),
+            updateMessage = policy.optStringOrNull("updateMessage"),
+            updatedAt = policy.optStringOrNull("updatedAt"),
+        )
     }
 }

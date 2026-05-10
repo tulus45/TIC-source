@@ -23,6 +23,7 @@ import com.timindonesiacerdas.ticcollect.registration.RegistrationScreen
 import com.timindonesiacerdas.ticcollect.registration.RegistrationViewModel
 import com.timindonesiacerdas.ticcollect.registration.RejectedScreen
 import com.timindonesiacerdas.ticcollect.registration.SuspendedScreen
+import com.timindonesiacerdas.ticcollect.registration.UpdateRequiredScreen
 import com.timindonesiacerdas.ticcollect.registration.WaitingApprovalScreen
 import com.timindonesiacerdas.ticcollect.splash.SplashScreen
 import com.timindonesiacerdas.ticcollect.upload.PendingUploadScreen
@@ -75,13 +76,15 @@ fun TicNavGraph(
         }
 
         composable(TicRoutes.Registration) {
-            LaunchedEffect(registrationUiState.currentStatus) {
+            LaunchedEffect(registrationUiState.currentStatus, authUiState.session.appAccess.requiresAppUpdate) {
                 when (registrationUiState.currentStatus) {
                     com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.PENDING -> {
                         navController.navigateClearingBackStack(TicRoutes.WaitingApproval)
                     }
                     com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.APPROVED -> {
-                        navController.navigateClearingBackStack(TicRoutes.Home)
+                        navController.navigateClearingBackStack(
+                            AuthViewModel.destinationFor(authUiState.session),
+                        )
                     }
                     com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.REJECTED -> {
                         navController.navigateClearingBackStack(TicRoutes.Rejected)
@@ -140,10 +143,12 @@ fun TicNavGraph(
                 registrationViewModel.refreshRegistrationStatus(showFailureMessage = false)
             }
 
-            LaunchedEffect(registrationUiState.currentStatus) {
+            LaunchedEffect(registrationUiState.currentStatus, authUiState.session.appAccess.requiresAppUpdate) {
                 when (registrationUiState.currentStatus) {
                     com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.APPROVED -> {
-                        navController.navigateClearingBackStack(TicRoutes.Home)
+                        navController.navigateClearingBackStack(
+                            AuthViewModel.destinationFor(authUiState.session),
+                        )
                     }
                     com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.REJECTED -> {
                         navController.navigateClearingBackStack(TicRoutes.Rejected)
@@ -181,10 +186,25 @@ fun TicNavGraph(
             )
         }
 
+        composable(TicRoutes.UpdateRequired) {
+            ProtectedRouteGuard(
+                navController = navController,
+                session = authUiState.session,
+                allowedRoute = TicRoutes.UpdateRequired,
+                onRefreshStatus = authViewModel::refreshAccessStatus,
+            )
+            UpdateRequiredScreen(
+                appAccess = authUiState.session.appAccess,
+                isRefreshing = registrationUiState.isRefreshingStatus,
+                onRefreshStatus = registrationViewModel::refreshRegistrationStatus,
+            )
+        }
+
         composable(TicRoutes.Home) {
             ProtectedRouteGuard(
                 navController = navController,
-                status = authUiState.session.profile?.status,
+                session = authUiState.session,
+                allowedRoute = TicRoutes.Home,
                 onRefreshStatus = authViewModel::refreshAccessStatus,
             )
             HomeScreen(
@@ -202,7 +222,8 @@ fun TicNavGraph(
         composable(TicRoutes.Form) {
             ProtectedRouteGuard(
                 navController = navController,
-                status = authUiState.session.profile?.status,
+                session = authUiState.session,
+                allowedRoute = TicRoutes.Home,
                 onRefreshStatus = authViewModel::refreshAccessStatus,
             )
             FormScreen(
@@ -218,7 +239,8 @@ fun TicNavGraph(
         composable(TicRoutes.EvidenceWorkflow) {
             ProtectedRouteGuard(
                 navController = navController,
-                status = authUiState.session.profile?.status,
+                session = authUiState.session,
+                allowedRoute = TicRoutes.Home,
                 onRefreshStatus = authViewModel::refreshAccessStatus,
             )
             EvidenceWorkflowScreen(
@@ -249,7 +271,8 @@ fun TicNavGraph(
         composable(TicRoutes.PendingUpload) {
             ProtectedRouteGuard(
                 navController = navController,
-                status = authUiState.session.profile?.status,
+                session = authUiState.session,
+                allowedRoute = TicRoutes.Home,
                 onRefreshStatus = authViewModel::refreshAccessStatus,
             )
             PendingUploadScreen(
@@ -263,7 +286,8 @@ fun TicNavGraph(
         composable(TicRoutes.Draft) {
             ProtectedRouteGuard(
                 navController = navController,
-                status = authUiState.session.profile?.status,
+                session = authUiState.session,
+                allowedRoute = TicRoutes.Home,
                 onRefreshStatus = authViewModel::refreshAccessStatus,
             )
             DraftScreen(
@@ -280,7 +304,8 @@ fun TicNavGraph(
         composable(TicRoutes.Profile) {
             ProtectedRouteGuard(
                 navController = navController,
-                status = authUiState.session.profile?.status,
+                session = authUiState.session,
+                allowedRoute = TicRoutes.Home,
                 onRefreshStatus = authViewModel::refreshAccessStatus,
             )
             ProfileScreen(
@@ -303,28 +328,18 @@ private fun NavHostController.navigateClearingBackStack(route: String) {
 @Composable
 private fun ProtectedRouteGuard(
     navController: NavHostController,
-    status: RegistrationStatus?,
+    session: com.timindonesiacerdas.ticcollect.data.model.SessionState,
+    allowedRoute: String,
     onRefreshStatus: () -> Unit,
 ) {
     LaunchedEffect(Unit) {
         onRefreshStatus()
     }
 
-    LaunchedEffect(status) {
-        when (status ?: RegistrationStatus.NOT_REGISTERED) {
-            RegistrationStatus.APPROVED -> Unit
-            RegistrationStatus.NOT_REGISTERED -> {
-                navController.navigateClearingBackStack(TicRoutes.Welcome)
-            }
-            RegistrationStatus.PENDING -> {
-                navController.navigateClearingBackStack(TicRoutes.WaitingApproval)
-            }
-            RegistrationStatus.REJECTED -> {
-                navController.navigateClearingBackStack(TicRoutes.Rejected)
-            }
-            RegistrationStatus.SUSPENDED -> {
-                navController.navigateClearingBackStack(TicRoutes.Suspended)
-            }
+    LaunchedEffect(session.profile?.status, session.appAccess.requiresAppUpdate) {
+        val destination = AuthViewModel.destinationFor(session)
+        if (destination != allowedRoute) {
+            navController.navigateClearingBackStack(destination)
         }
     }
 }

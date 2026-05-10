@@ -1,7 +1,6 @@
 package com.timindonesiacerdas.ticcollect.registration
 
 import android.app.Application
-import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.timindonesiacerdas.ticcollect.data.local.InMemorySessionStore
@@ -9,10 +8,6 @@ import com.timindonesiacerdas.ticcollect.data.model.LocalRegistrationDraft
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationDraft
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
 import com.timindonesiacerdas.ticcollect.utils.TimeFormatter
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -52,8 +47,6 @@ data class RegistrationUiState(
     val isAuthenticated: Boolean = false,
     val currentStatus: RegistrationStatus? = null,
     val rejectionReason: String? = null,
-    val isKtpOcrProcessing: Boolean = false,
-    val ktpOcrMessage: String? = null,
     val isRefreshingStatus: Boolean = false,
     val statusSyncMessage: String? = null,
     val availableAreaKerja: List<String> = workAreaOptions,
@@ -64,7 +57,6 @@ class RegistrationViewModel(
 ) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(RegistrationUiState())
     val uiState: StateFlow<RegistrationUiState> = _uiState.asStateFlow()
-    private val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
     val sessionState = InMemorySessionStore.session.stateIn(
         scope = viewModelScope,
@@ -164,12 +156,9 @@ class RegistrationViewModel(
             it.copy(
                 ktpLocalPath = path,
                 errorMessage = null,
-                isKtpOcrProcessing = true,
-                ktpOcrMessage = "Membaca data KTP...",
             )
         }
         persistWorkingDraft()
-        runKtpOcr(path)
     }
 
     fun onSelfieCaptured(path: String) {
@@ -280,8 +269,17 @@ class RegistrationViewModel(
                 InMemorySessionStore.refreshRegistrationFromBackend()
             }.onSuccess { profile ->
                 val status = profile?.status ?: _uiState.value.currentStatus ?: RegistrationStatus.NOT_REGISTERED
+                val appAccess = InMemorySessionStore.session.value.appAccess
+                val latestVersionLabel = appAccess.releasePolicy.latestVersionName
+                    ?.takeIf { it.isNotBlank() }
+                    ?: appAccess.releasePolicy.latestVersionCode.takeIf { it > 0 }?.let { "v$it" }
+                    ?: "release terbaru"
                 val message = when (status) {
-                    RegistrationStatus.APPROVED -> "Registrasi Anda sudah disetujui. Akses Home akan dibuka."
+                    RegistrationStatus.APPROVED -> if (appAccess.requiresAppUpdate) {
+                        "Registrasi Anda sudah disetujui, tetapi APK harus diupdate dulu ke $latestVersionLabel sebelum Home dibuka."
+                    } else {
+                        "Registrasi Anda sudah disetujui. Akses Home akan dibuka."
+                    }
                     RegistrationStatus.REJECTED -> profile?.rejectionReason
                         ?: "Registrasi ditolak. Silakan periksa catatan admin."
                     RegistrationStatus.SUSPENDED -> profile?.rejectionReason
@@ -311,11 +309,6 @@ class RegistrationViewModel(
                 }
             }
         }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        textRecognizer.close()
     }
 
     private fun validate(state: RegistrationUiState): String? {
@@ -370,63 +363,23 @@ class RegistrationViewModel(
         }
     }
 
-    private fun runKtpOcr(path: String) {
-        val image = runCatching {
-            InputImage.fromFilePath(
-                getApplication(),
-                Uri.fromFile(File(path)),
-            )
-        }.getOrElse { error ->
-            _uiState.update { current ->
-                if (current.ktpLocalPath != path) {
-                    current
-                } else {
-                    current.copy(
-                        isKtpOcrProcessing = false,
-                        ktpOcrMessage = "Foto KTP tersimpan, tetapi OCR belum bisa dijalankan: ${error.message ?: "gagal memuat gambar"}",
-                    )
-                }
-            }
-            return
-        }
-
-        textRecognizer.process(image)
-            .addOnSuccessListener { result ->
-                val parsedResult = KtpOcrParser.parse(result.text)
-                _uiState.update { current ->
-                    if (current.ktpLocalPath != path) {
-                        current
-                    } else {
-                        current.copy(
-                            nik = parsedResult.nik ?: current.nik,
-                            isKtpOcrProcessing = false,
-                            ktpOcrMessage = parsedResult.message,
-                        )
-                    }
-                }
-                persistWorkingDraft()
-            }
-            .addOnFailureListener {
-                _uiState.update { current ->
-                    if (current.ktpLocalPath != path) {
-                        current
-                    } else {
-                        current.copy(
-                            isKtpOcrProcessing = false,
-                            ktpOcrMessage = "Foto KTP tersimpan, tetapi OCR belum berhasil membaca data. Silakan isi manual.",
-                        )
-                    }
-                }
-                persistWorkingDraft()
-            }
-    }
-
     private fun registrationStatusFromServer(value: String): RegistrationStatus =
         runCatching { RegistrationStatus.valueOf(value.trim().uppercase()) }
             .getOrDefault(RegistrationStatus.PENDING)
 
     private fun fallbackStatusMessage(status: RegistrationStatus?): String = when (status) {
-        RegistrationStatus.APPROVED -> "Registrasi Anda sudah disetujui. Akses Home akan dibuka."
+        RegistrationStatus.APPROVED -> {
+            val appAccess = InMemorySessionStore.session.value.appAccess
+            val latestVersionLabel = appAccess.releasePolicy.latestVersionName
+                ?.takeIf { it.isNotBlank() }
+                ?: appAccess.releasePolicy.latestVersionCode.takeIf { it > 0 }?.let { "v$it" }
+                ?: "release terbaru"
+            if (appAccess.requiresAppUpdate) {
+                "Registrasi Anda sudah disetujui, tetapi APK harus diupdate dulu ke $latestVersionLabel."
+            } else {
+                "Registrasi Anda sudah disetujui. Akses Home akan dibuka."
+            }
+        }
         RegistrationStatus.REJECTED -> "Registrasi ditolak. Silakan periksa catatan admin."
         RegistrationStatus.SUSPENDED -> "Akun Anda sedang ditangguhkan. Silakan hubungi admin."
         RegistrationStatus.PENDING -> "Registrasi sudah dikirim. Status terakhir masih menunggu review admin."

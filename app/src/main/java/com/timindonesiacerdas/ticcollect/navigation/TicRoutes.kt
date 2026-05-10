@@ -8,6 +8,7 @@ object TicRoutes {
     const val KtpCamera = "ktp_camera"
     const val SelfieCamera = "selfie_camera"
     const val WaitingApproval = "waiting_approval"
+    const val UpdateRequired = "update_required"
     const val Rejected = "rejected"
     const val Suspended = "suspended"
     const val Home = "home"
