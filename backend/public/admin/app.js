@@ -573,8 +573,8 @@ function renderRows() {
     const updated = fragment.querySelector(".row-updated");
     const viewButton = fragment.querySelector(".row-view-button");
 
-    statusPill.textContent = item.status || "-";
-    statusPill.dataset.status = item.status || "";
+    statusPill.textContent = formatRegistrationStatusLabel(item.status);
+    statusPill.dataset.status = normalizeRegistrationStatus(item.status);
     name.textContent = item.nama || item.displayName || "Tanpa nama";
     meta.textContent = item.gmail || "-";
     area.textContent = item.areaKerja || item.kabupaten || "Belum diisi";
