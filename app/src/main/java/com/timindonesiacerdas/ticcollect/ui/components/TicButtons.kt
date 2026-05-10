@@ -10,6 +10,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -18,12 +19,13 @@ fun TicPrimaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    buttonHeight: Dp = 56.dp,
 ) {
     Button(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .height(buttonHeight),
         enabled = enabled,
         shape = RoundedCornerShape(18.dp),
         colors = ButtonDefaults.buttonColors(
@@ -41,12 +43,13 @@ fun TicSecondaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    buttonHeight: Dp = 56.dp,
 ) {
     OutlinedButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .height(buttonHeight),
         enabled = enabled,
         shape = RoundedCornerShape(18.dp),
     ) {

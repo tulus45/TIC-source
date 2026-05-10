@@ -15,6 +15,8 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,11 +24,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,10 +57,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
+import com.timindonesiacerdas.ticcollect.R
 import com.timindonesiacerdas.ticcollect.camera.processEvidencePhoto
 import com.timindonesiacerdas.ticcollect.location.LocationStamp
 import com.timindonesiacerdas.ticcollect.location.hasLocationPermission
@@ -57,7 +72,6 @@ import com.timindonesiacerdas.ticcollect.location.resolveCurrentLocationStamp
 import com.timindonesiacerdas.ticcollect.ui.components.TicPrimaryButton
 import com.timindonesiacerdas.ticcollect.ui.components.TicSecondaryButton
 import com.timindonesiacerdas.ticcollect.ui.components.TicSectionCard
-import androidx.compose.material3.Surface
 import com.timindonesiacerdas.ticcollect.utils.TimeFormatter
 import java.io.File
 import java.text.SimpleDateFormat
@@ -66,6 +80,19 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private val evidenceGuideImageResByStepId = mapOf(
+    "photo_plang_sekolah" to R.drawable.petunjuk_foto1,
+    "photo_box_pic" to R.drawable.petunjuk_foto2,
+    "photo_kelengkapan_unit" to R.drawable.petunjuk_foto3,
+    "photo_proses_instalasi" to R.drawable.petunjuk_foto4,
+    "photo_serial_number" to R.drawable.petunjuk_foto5,
+    "photo_training" to R.drawable.petunjuk_foto6,
+    "photo_bapp_1" to R.drawable.petunjuk_foto7,
+    "photo_bapp_2" to R.drawable.petunjuk_foto8,
+)
+
+private val compactPhotoActionButtonHeight = 48.dp
 
 @Composable
 fun EvidenceWorkflowScreen(
@@ -140,6 +167,8 @@ private fun EvidencePhotoStepScreen(
     var imageCapture by remember(step.id) { mutableStateOf<ImageCapture?>(null) }
     var locationStamp by remember(step.id) { mutableStateOf<LocationStamp?>(null) }
     var isRefreshingLocation by rememberSaveable(step.id) { mutableStateOf(false) }
+    var isGuideVisible by rememberSaveable(step.id) { mutableStateOf(false) }
+    val guideImageResId = remember(step.id) { evidenceGuideImageResByStepId[step.id] }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -246,6 +275,14 @@ private fun EvidencePhotoStepScreen(
         }
     }
 
+    if (isGuideVisible && guideImageResId != null) {
+        EvidenceGuideDialog(
+            title = step.title,
+            guideImageResId = guideImageResId,
+            onDismiss = { isGuideVisible = false },
+        )
+    }
+
     Scaffold(
         containerColor = Color(0xFF101218),
     ) { innerPadding ->
@@ -279,6 +316,10 @@ private fun EvidencePhotoStepScreen(
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.White.copy(alpha = 0.76f),
             )
+
+            if (guideImageResId != null) {
+                GuideHintButton(onClick = { isGuideVisible = true })
+            }
 
             Surface(
                 modifier = Modifier
@@ -392,11 +433,13 @@ private fun EvidencePhotoStepScreen(
                                     onPhotoCleared()
                                 },
                                 modifier = Modifier.weight(1f),
+                                buttonHeight = compactPhotoActionButtonHeight,
                             )
                             TicPrimaryButton(
                                 text = "Next",
                                 onClick = onNextStep,
                                 modifier = Modifier.weight(1f),
+                                buttonHeight = compactPhotoActionButtonHeight,
                             )
                         }
                     } else {
@@ -409,6 +452,7 @@ private fun EvidencePhotoStepScreen(
                                 onClick = { refreshLocation() },
                                 enabled = !isRefreshingLocation && !isCapturing,
                                 modifier = Modifier.weight(1f),
+                                buttonHeight = compactPhotoActionButtonHeight,
                             )
                             TicPrimaryButton(
                                 text = if (isCapturing) "Menyimpan..." else "Ambil Foto",
@@ -493,6 +537,7 @@ private fun EvidencePhotoStepScreen(
                                     imageCapture != null &&
                                     locationStamp != null,
                                 modifier = Modifier.weight(1f),
+                                buttonHeight = compactPhotoActionButtonHeight,
                             )
                         }
                     }
@@ -677,6 +722,96 @@ private fun EvidenceGpsStepScreen(
                             modifier = Modifier.weight(1f),
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuideHintButton(
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Lightbulb,
+            contentDescription = null,
+            tint = Color(0xFFFFC857),
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "Petunjuk Foto",
+            style = MaterialTheme.typography.labelLarge,
+        )
+    }
+}
+
+@Composable
+private fun EvidenceGuideDialog(
+    title: String,
+    guideImageResId: Int,
+    onDismiss: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .padding(horizontal = 16.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = "Petunjuk $title",
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                        Text(
+                            text = "Cocokkan hasil foto dengan contoh ini sebelum menekan Ambil Foto.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                        )
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text(text = "Tutup")
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 620.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(20.dp),
+                        )
+                        .padding(10.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    Image(
+                        painter = painterResource(id = guideImageResId),
+                        contentDescription = "Petunjuk $title",
+                        modifier = Modifier.fillMaxWidth(),
+                        contentScale = ContentScale.Fit,
+                    )
                 }
             }
         }
