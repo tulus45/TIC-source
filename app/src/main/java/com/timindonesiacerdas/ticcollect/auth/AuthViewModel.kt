@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.timindonesiacerdas.ticcollect.data.local.InMemorySessionStore
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
 import com.timindonesiacerdas.ticcollect.data.model.SessionState
+import com.timindonesiacerdas.ticcollect.data.model.isApprovedAccess
 import com.timindonesiacerdas.ticcollect.navigation.TicRoutes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -69,16 +70,17 @@ class AuthViewModel : ViewModel() {
     companion object {
         fun destinationFor(session: SessionState): String {
             val status = session.profile?.status ?: RegistrationStatus.NOT_REGISTERED
-            return when (status) {
-                RegistrationStatus.NOT_REGISTERED -> TicRoutes.Welcome
-                RegistrationStatus.PENDING -> TicRoutes.WaitingApproval
-                RegistrationStatus.APPROVED -> if (session.appAccess.requiresAppUpdate) {
+            return when {
+                status == RegistrationStatus.NOT_REGISTERED -> TicRoutes.Welcome
+                status == RegistrationStatus.PENDING -> TicRoutes.WaitingApproval
+                status.isApprovedAccess -> if (session.appAccess.requiresAppUpdate) {
                     TicRoutes.UpdateRequired
                 } else {
                     TicRoutes.Home
                 }
-                RegistrationStatus.REJECTED -> TicRoutes.Rejected
-                RegistrationStatus.SUSPENDED -> TicRoutes.Suspended
+                status == RegistrationStatus.REJECTED -> TicRoutes.Rejected
+                status == RegistrationStatus.SUSPENDED -> TicRoutes.Suspended
+                else -> TicRoutes.WaitingApproval
             }
         }
     }

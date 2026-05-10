@@ -11,7 +11,7 @@ import com.timindonesiacerdas.ticcollect.auth.AuthViewModel
 import com.timindonesiacerdas.ticcollect.auth.WelcomeScreen
 import com.timindonesiacerdas.ticcollect.camera.KtpCameraScreen
 import com.timindonesiacerdas.ticcollect.camera.SelfieCameraScreen
-import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
+import com.timindonesiacerdas.ticcollect.data.model.isApprovedAccess
 import com.timindonesiacerdas.ticcollect.form.EvidenceWorkflowScreen
 import com.timindonesiacerdas.ticcollect.form.FormScreen
 import com.timindonesiacerdas.ticcollect.form.FormViewModel
@@ -77,19 +77,19 @@ fun TicNavGraph(
 
         composable(TicRoutes.Registration) {
             LaunchedEffect(registrationUiState.currentStatus, authUiState.session.appAccess.requiresAppUpdate) {
-                when (registrationUiState.currentStatus) {
-                    com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.PENDING -> {
+                when {
+                    registrationUiState.currentStatus == com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.PENDING -> {
                         navController.navigateClearingBackStack(TicRoutes.WaitingApproval)
                     }
-                    com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.APPROVED -> {
+                    registrationUiState.currentStatus?.isApprovedAccess == true -> {
                         navController.navigateClearingBackStack(
                             AuthViewModel.destinationFor(authUiState.session),
                         )
                     }
-                    com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.REJECTED -> {
+                    registrationUiState.currentStatus == com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.REJECTED -> {
                         navController.navigateClearingBackStack(TicRoutes.Rejected)
                     }
-                    com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.SUSPENDED -> {
+                    registrationUiState.currentStatus == com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.SUSPENDED -> {
                         navController.navigateClearingBackStack(TicRoutes.Suspended)
                     }
                     else -> Unit
@@ -144,16 +144,16 @@ fun TicNavGraph(
             }
 
             LaunchedEffect(registrationUiState.currentStatus, authUiState.session.appAccess.requiresAppUpdate) {
-                when (registrationUiState.currentStatus) {
-                    com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.APPROVED -> {
+                when {
+                    registrationUiState.currentStatus?.isApprovedAccess == true -> {
                         navController.navigateClearingBackStack(
                             AuthViewModel.destinationFor(authUiState.session),
                         )
                     }
-                    com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.REJECTED -> {
+                    registrationUiState.currentStatus == com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.REJECTED -> {
                         navController.navigateClearingBackStack(TicRoutes.Rejected)
                     }
-                    com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.SUSPENDED -> {
+                    registrationUiState.currentStatus == com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus.SUSPENDED -> {
                         navController.navigateClearingBackStack(TicRoutes.Suspended)
                     }
                     else -> Unit
@@ -264,6 +264,7 @@ fun TicNavGraph(
                 },
                 onPhotoRecorded = formViewModel::recordPhotoCapture,
                 onPhotoCleared = formViewModel::clearPhotoCapture,
+                onSharedPhotoGpsUpdated = formViewModel::updateSharedPhotoGps,
                 onGpsRecorded = formViewModel::recordGpsCapture,
             )
         }

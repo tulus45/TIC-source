@@ -658,6 +658,27 @@ const SUBMISSION_REVIEW_SUMMARY_META = [
   { key: "SUSPENDED", label: "Suspended", color: "#475569" },
   { key: "REJECTED", label: "Rejected", color: "#bb3f34" },
 ];
+const REGISTRATION_APPROVED_STATUS = "APPROVEDV2";
+
+function normalizeRegistrationStatus(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized === "APPROVED" || normalized === "APPROVEDV2") {
+    return REGISTRATION_APPROVED_STATUS;
+  }
+  if (["REJECTED", "SUSPENDED"].includes(normalized)) {
+    return normalized;
+  }
+  return normalized || "PENDING";
+}
+
+function formatRegistrationStatusLabel(value) {
+  const normalized = normalizeRegistrationStatus(value);
+  if (normalized === REGISTRATION_APPROVED_STATUS) return "Approved";
+  if (normalized === "PENDING") return "Pending";
+  if (normalized === "REJECTED") return "Rejected";
+  if (normalized === "SUSPENDED") return "Suspended";
+  return normalized || "-";
+}
 
 function createEmptySubmissionReviewCounts() {
   return SUBMISSION_REVIEW_SUMMARY_META.reduce((result, item) => {
@@ -1443,8 +1464,8 @@ function refreshSelectedRegistration(successMessage = "") {
 function fillRegistrationDrawer(item, successMessage = "") {
   setDrawerModeCopy("registration");
   ui.drawerDeleteButton.classList.add("hidden");
-  ui.drawerStatusPill.textContent = item.status || "-";
-  ui.drawerStatusPill.dataset.status = item.status || "";
+  ui.drawerStatusPill.textContent = formatRegistrationStatusLabel(item.status);
+  ui.drawerStatusPill.dataset.status = normalizeRegistrationStatus(item.status);
   ui.drawerTitle.textContent = item.nama || item.displayName || "Tanpa nama";
   ui.drawerMeta.textContent = [item.gmail || "-", item.uid || "-", item.areaKerja || item.kabupaten || "Belum diisi"]
     .filter(Boolean)
@@ -1706,10 +1727,12 @@ function createPreviewAssetPlaceholder(message) {
 
 function setDrawerActionAvailability(item) {
   const hasSelection = Boolean(item);
-  const status = selectedDrawerType === "submission" ? getSubmissionReviewStatus(item) : item?.status || "";
+  const status = selectedDrawerType === "submission"
+    ? getSubmissionReviewStatus(item)
+    : normalizeRegistrationStatus(item?.status);
   ui.drawerNoteInput.disabled = !hasSelection;
   ui.drawerNoteSaveButton.disabled = !hasSelection;
-  ui.drawerApproveButton.disabled = !hasSelection || status === "APPROVED";
+  ui.drawerApproveButton.disabled = !hasSelection || status === REGISTRATION_APPROVED_STATUS || status === "APPROVED";
   ui.drawerRejectButton.disabled = !hasSelection || status === "REJECTED";
   ui.drawerSuspendButton.disabled = !hasSelection || status === "SUSPENDED";
   ui.drawerDeleteButton.disabled = !hasSelection || selectedDrawerType !== "submission";
@@ -2153,7 +2176,7 @@ function buildAreaSummary(items) {
 
   items.forEach((item) => {
     const areaKerja = item.areaKerja || "Belum diisi";
-    const status = String(item.status || "").toUpperCase();
+    const status = normalizeRegistrationStatus(item.status);
 
     if (!areaMap.has(areaKerja)) {
       areaMap.set(areaKerja, {
@@ -2174,7 +2197,7 @@ function buildAreaSummary(items) {
     if (status === "PENDING") {
       row.pending += 1;
       totals.pending += 1;
-    } else if (status === "APPROVED") {
+    } else if (status === REGISTRATION_APPROVED_STATUS) {
       row.approved += 1;
       totals.approved += 1;
     } else if (status === "REJECTED") {
@@ -2569,9 +2592,11 @@ async function saveRegistrationAreaNeed(areaKerja, input) {
 function createStatusCell(status) {
   const td = document.createElement("td");
   const pill = document.createElement("span");
+  const normalizedStatus = normalizeRegistrationStatus(status);
+  const rawStatus = String(status || "").trim().toUpperCase();
   pill.className = "status-pill";
-  pill.dataset.status = status || "";
-  pill.textContent = status || "-";
+  pill.dataset.status = rawStatus === "APPROVEDV2" ? normalizedStatus : (status || "");
+  pill.textContent = rawStatus === "APPROVEDV2" ? formatRegistrationStatusLabel(status) : (status || "-");
   td.appendChild(pill);
   return td;
 }

@@ -104,14 +104,15 @@ async function readRegistrations() {
   await ensureStorage();
   const raw = await fs.readFile(registrationsFile, "utf8");
   const parsed = JSON.parse(raw);
-  return Array.isArray(parsed) ? parsed : [];
+  return Array.isArray(parsed) ? parsed.map(normalizeRegistrationRecord) : [];
 }
 
 async function writeRegistrations(items) {
   await ensureStorage();
+  const normalizedItems = Array.isArray(items) ? items.map(normalizeRegistrationRecord) : [];
   await fs.writeFile(
     registrationsFile,
-    `${JSON.stringify(items, null, 2)}\n`,
+    `${JSON.stringify(normalizedItems, null, 2)}\n`,
     "utf8",
   );
 }
@@ -243,6 +244,27 @@ function normalizeSubmissionReviewStatus(value) {
   }
 
   return "PENDING";
+}
+
+function normalizeRegistrationStatus(value) {
+  const normalized = normalizeString(value).toUpperCase();
+  if (normalized === "APPROVED" || normalized === "APPROVEDV2") {
+    return "APPROVEDV2";
+  }
+  if (["REJECTED", "SUSPENDED"].includes(normalized)) {
+    return normalized;
+  }
+
+  return "PENDING";
+}
+
+function normalizeRegistrationRecord(record = {}) {
+  return {
+    ...record,
+    status: normalizeRegistrationStatus(record?.status),
+    adminNote: normalizeString(record?.adminNote) || null,
+    rejectionReason: normalizeString(record?.rejectionReason) || null,
+  };
 }
 
 function normalizeSubmissionIdentity(record, registrations = []) {
@@ -2489,9 +2511,10 @@ async function handleApi(req, res, url) {
       readRegistrations(),
       readRegistrationAreaNeeds(),
     ]);
-    const statusFilter = normalizeString(url.searchParams.get("status")).toUpperCase();
+    const rawStatusFilter = normalizeString(url.searchParams.get("status"));
+    const statusFilter = rawStatusFilter ? normalizeRegistrationStatus(rawStatusFilter) : "";
     const filtered = statusFilter
-      ? items.filter((item) => item.status === statusFilter)
+      ? items.filter((item) => normalizeRegistrationStatus(item.status) === statusFilter)
       : items;
 
     sendJson(res, 200, {
@@ -2549,7 +2572,7 @@ async function handleApi(req, res, url) {
 
     const adminNote = normalizeString(body.adminNote) || normalizeString(body.rejectionReason);
     target.status = action === "approve"
-      ? "APPROVED"
+      ? "APPROVEDV2"
       : action === "reject"
         ? "REJECTED"
         : "SUSPENDED";

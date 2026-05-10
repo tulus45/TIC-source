@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
+import com.timindonesiacerdas.ticcollect.data.model.isApprovedAccess
 
 private val LocalPrimary = Color(0xFF243B6B)
 private val LocalPrimarySoft = Color(0xFFDEE6F8)
@@ -214,20 +215,32 @@ fun TicStatusPill(
     status: RegistrationStatus,
     modifier: Modifier = Modifier,
 ) {
-    val (backgroundColor, label) = when (status) {
-        RegistrationStatus.NOT_REGISTERED -> LocalPrimarySoft to "Belum Registrasi"
-        RegistrationStatus.PENDING -> LocalWarning.copy(alpha = 0.16f) to "Pending"
-        RegistrationStatus.APPROVED -> LocalSuccess.copy(alpha = 0.16f) to "Approved"
-        RegistrationStatus.REJECTED -> LocalError.copy(alpha = 0.14f) to "Rejected"
-        RegistrationStatus.SUSPENDED -> LocalError.copy(alpha = 0.14f) to "Suspended"
-    }
-
-    val textColor = when (status) {
-        RegistrationStatus.NOT_REGISTERED -> MaterialTheme.colorScheme.primary
-        RegistrationStatus.PENDING -> LocalWarning
-        RegistrationStatus.APPROVED -> LocalSuccess
-        RegistrationStatus.REJECTED -> LocalError
-        RegistrationStatus.SUSPENDED -> LocalError
+    val (backgroundColor, label, textColor) = when {
+        status == RegistrationStatus.NOT_REGISTERED -> Triple(
+            LocalPrimarySoft,
+            "Belum Registrasi",
+            MaterialTheme.colorScheme.primary,
+        )
+        status == RegistrationStatus.PENDING -> Triple(
+            LocalWarning.copy(alpha = 0.16f),
+            "Pending",
+            LocalWarning,
+        )
+        status.isApprovedAccess -> Triple(
+            LocalSuccess.copy(alpha = 0.16f),
+            "Approved",
+            LocalSuccess,
+        )
+        status == RegistrationStatus.REJECTED -> Triple(
+            LocalError.copy(alpha = 0.14f),
+            "Rejected",
+            LocalError,
+        )
+        else -> Triple(
+            LocalError.copy(alpha = 0.14f),
+            "Suspended",
+            LocalError,
+        )
     }
 
     Surface(

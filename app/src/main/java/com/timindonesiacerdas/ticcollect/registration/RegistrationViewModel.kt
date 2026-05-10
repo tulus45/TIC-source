@@ -218,7 +218,7 @@ class RegistrationViewModel(
                         isSubmitting = false,
                         isSubmitted = true,
                         currentStatus = registrationStatusFromServer(response.status),
-                        statusSyncMessage = "Registrasi berhasil dikirim ke server. Status saat ini: ${response.status}.",
+                        statusSyncMessage = "Registrasi berhasil dikirim ke server. Status saat ini: ${registrationStatusLabelFromServer(response.status)}.",
                     )
                 }
             }.onFailure { error ->
@@ -237,7 +237,7 @@ class RegistrationViewModel(
     }
 
     fun simulateApproved() {
-        InMemorySessionStore.setApprovalStatus(RegistrationStatus.APPROVED)
+        InMemorySessionStore.setApprovalStatus(RegistrationStatus.APPROVEDV2)
     }
 
     fun simulateRejected() {
@@ -275,7 +275,8 @@ class RegistrationViewModel(
                     ?: appAccess.releasePolicy.latestVersionCode.takeIf { it > 0 }?.let { "v$it" }
                     ?: "release terbaru"
                 val message = when (status) {
-                    RegistrationStatus.APPROVED -> if (appAccess.requiresAppUpdate) {
+                    RegistrationStatus.APPROVED,
+                    RegistrationStatus.APPROVEDV2 -> if (appAccess.requiresAppUpdate) {
                         "Registrasi Anda sudah disetujui, tetapi APK harus diupdate dulu ke $latestVersionLabel sebelum Home dibuka."
                     } else {
                         "Registrasi Anda sudah disetujui. Akses Home akan dibuka."
@@ -367,8 +368,20 @@ class RegistrationViewModel(
         runCatching { RegistrationStatus.valueOf(value.trim().uppercase()) }
             .getOrDefault(RegistrationStatus.PENDING)
 
+    private fun registrationStatusLabelFromServer(value: String): String {
+        return when (registrationStatusFromServer(value)) {
+            RegistrationStatus.APPROVED,
+            RegistrationStatus.APPROVEDV2 -> "Approved"
+            RegistrationStatus.REJECTED -> "Rejected"
+            RegistrationStatus.SUSPENDED -> "Suspended"
+            RegistrationStatus.PENDING -> "Pending"
+            RegistrationStatus.NOT_REGISTERED -> "Belum terkonfirmasi"
+        }
+    }
+
     private fun fallbackStatusMessage(status: RegistrationStatus?): String = when (status) {
-        RegistrationStatus.APPROVED -> {
+        RegistrationStatus.APPROVED,
+        RegistrationStatus.APPROVEDV2 -> {
             val appAccess = InMemorySessionStore.session.value.appAccess
             val latestVersionLabel = appAccess.releasePolicy.latestVersionName
                 ?.takeIf { it.isNotBlank() }

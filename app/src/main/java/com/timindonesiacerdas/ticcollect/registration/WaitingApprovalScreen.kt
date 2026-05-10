@@ -7,6 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
+import com.timindonesiacerdas.ticcollect.data.model.isApprovedAccess
 import com.timindonesiacerdas.ticcollect.ui.components.TicPrimaryButton
 import com.timindonesiacerdas.ticcollect.ui.components.TicScreenContainer
 import com.timindonesiacerdas.ticcollect.ui.components.TicSectionCard
@@ -48,10 +49,11 @@ fun WaitingApprovalScreen(
     }
 }
 
-private fun waitingStatusLabel(status: RegistrationStatus?): String = when (status) {
-    RegistrationStatus.APPROVED -> "Approved"
-    RegistrationStatus.REJECTED -> "Rejected"
-    RegistrationStatus.SUSPENDED -> "Suspended"
-    RegistrationStatus.PENDING -> "Pending review"
-    RegistrationStatus.NOT_REGISTERED, null -> "Belum terkonfirmasi"
+private fun waitingStatusLabel(status: RegistrationStatus?): String = when {
+    status == null || status == RegistrationStatus.NOT_REGISTERED -> "Belum terkonfirmasi"
+    status == RegistrationStatus.PENDING -> "Pending review"
+    status.isApprovedAccess -> "Approved"
+    status == RegistrationStatus.REJECTED -> "Rejected"
+    status == RegistrationStatus.SUSPENDED -> "Suspended"
+    else -> "Belum terkonfirmasi"
 }

@@ -870,6 +870,7 @@ a {
 }
 
 .status-pill[data-status="APPROVED"],
+.status-pill[data-status="APPROVEDV2"],
 .status-pill[data-status="UPLOADED"],
 .status-pill[data-status="DONE"] {
   color: var(--success);

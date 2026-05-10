@@ -35,6 +35,7 @@ data class EvidenceStepDefinition(
     val filenamePrefix: String,
     val lensFacing: Int = CameraSelector.LENS_FACING_BACK,
     val applyVisualStamp: Boolean = true,
+    val requiresLocation: Boolean = true,
 )
 
 data class EvidencePhotoRecord(
@@ -58,6 +59,7 @@ data class SubmissionEditSeed(
     val selectedLocationByColumn: Map<String, String>,
     val capturedPhotos: Map<String, EvidencePhotoRecord>,
     val recordedGps: EvidenceGpsRecord?,
+    val sharedPhotoGps: EvidenceGpsRecord?,
 )
 
 data class FormUiState(
@@ -69,6 +71,7 @@ data class FormUiState(
     val currentEvidenceStepIndex: Int = 0,
     val capturedPhotos: Map<String, EvidencePhotoRecord> = emptyMap(),
     val recordedGps: EvidenceGpsRecord? = null,
+    val sharedPhotoGps: EvidenceGpsRecord? = null,
     val editingSubmissionId: String? = null,
     val pendingEditSeed: SubmissionEditSeed? = null,
 )
@@ -123,6 +126,7 @@ val defaultEvidenceSteps = listOf(
         kind = EvidenceStepKind.PHOTO,
         filenamePrefix = "bapp_1",
         applyVisualStamp = false,
+        requiresLocation = false,
     ),
     EvidenceStepDefinition(
         id = "photo_bapp_2",
@@ -131,6 +135,7 @@ val defaultEvidenceSteps = listOf(
         kind = EvidenceStepKind.PHOTO,
         filenamePrefix = "bapp_2",
         applyVisualStamp = false,
+        requiresLocation = false,
     ),
     EvidenceStepDefinition(
         id = "record_gps",
@@ -237,6 +242,7 @@ class FormViewModel : ViewModel() {
                 currentEvidenceStepIndex = 0,
                 capturedPhotos = seed.capturedPhotos,
                 recordedGps = seed.recordedGps,
+                sharedPhotoGps = seed.sharedPhotoGps,
                 editingSubmissionId = target.submissionId,
                 pendingEditSeed = seed,
                 errorMessage = null,
@@ -254,6 +260,7 @@ class FormViewModel : ViewModel() {
                 currentEvidenceStepIndex = 0,
                 capturedPhotos = emptyMap(),
                 recordedGps = null,
+                sharedPhotoGps = null,
             )
         }
     }
@@ -300,7 +307,16 @@ class FormViewModel : ViewModel() {
 
     fun recordGpsCapture(record: EvidenceGpsRecord) {
         _uiState.update { current ->
-            current.copy(recordedGps = record)
+            current.copy(
+                recordedGps = record,
+                sharedPhotoGps = record,
+            )
+        }
+    }
+
+    fun updateSharedPhotoGps(record: EvidenceGpsRecord) {
+        _uiState.update { current ->
+            current.copy(sharedPhotoGps = record)
         }
     }
 
@@ -443,6 +459,7 @@ class FormViewModel : ViewModel() {
             currentEvidenceStepIndex = 0,
             capturedPhotos = emptyMap(),
             recordedGps = null,
+            sharedPhotoGps = null,
             editingSubmissionId = null,
             pendingEditSeed = null,
             errorMessage = null,
@@ -473,6 +490,7 @@ class FormViewModel : ViewModel() {
             selectedLocationByColumn = selectedLocation,
             capturedPhotos = capturedPhotos,
             recordedGps = recordedGps,
+            sharedPhotoGps = capturedPhotos.firstPhotoGpsRecord() ?: recordedGps,
         )
     }
 
@@ -525,5 +543,22 @@ class FormViewModel : ViewModel() {
 
     private fun JSONObject.optNullableFloat(key: String): Float? {
         return if (has(key) && !isNull(key)) optDouble(key).toFloat() else null
+    }
+
+    private fun Map<String, EvidencePhotoRecord>.firstPhotoGpsRecord(): EvidenceGpsRecord? {
+        val firstPhoto = defaultEvidenceSteps
+            .asSequence()
+            .filter { it.kind == EvidenceStepKind.PHOTO }
+            .mapNotNull { this[it.id] }
+            .firstOrNull()
+            ?: return null
+
+        return EvidenceGpsRecord(
+            timestamp = firstPhoto.timestamp,
+            latitude = firstPhoto.latitude,
+            longitude = firstPhoto.longitude,
+            accuracyMeters = firstPhoto.accuracyMeters,
+            address = firstPhoto.address,
+        )
     }
 }

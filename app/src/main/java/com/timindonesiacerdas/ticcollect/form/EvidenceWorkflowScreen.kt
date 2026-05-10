@@ -10,20 +10,24 @@ import android.os.Environment
 import android.view.Surface as AndroidSurface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
@@ -33,6 +37,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -93,6 +98,7 @@ private val evidenceGuideImageResByStepId = mapOf(
 )
 
 private val compactPhotoActionButtonHeight = 48.dp
+private const val photoPreviewAspectRatio = 0.75f
 
 @Composable
 fun EvidenceWorkflowScreen(
@@ -103,6 +109,7 @@ fun EvidenceWorkflowScreen(
     onFinish: () -> Unit,
     onPhotoRecorded: (String, EvidencePhotoRecord) -> Unit,
     onPhotoCleared: (String) -> Unit,
+    onSharedPhotoGpsUpdated: (EvidenceGpsRecord) -> Unit,
     onGpsRecorded: (EvidenceGpsRecord) -> Unit,
 ) {
     val step = uiState.evidenceSteps.getOrNull(uiState.currentEvidenceStepIndex) ?: return
@@ -118,8 +125,10 @@ fun EvidenceWorkflowScreen(
             onBack = onBack,
             onPreviousStep = onPreviousStep,
             onNextStep = onNextStep,
+            sharedPhotoGps = uiState.sharedPhotoGps,
             onPhotoRecorded = { record -> onPhotoRecorded(step.id, record) },
             onPhotoCleared = { onPhotoCleared(step.id) },
+            onSharedPhotoGpsUpdated = onSharedPhotoGpsUpdated,
         )
 
         EvidenceStepKind.GPS -> EvidenceGpsStepScreen(
@@ -127,6 +136,7 @@ fun EvidenceWorkflowScreen(
             stepIndex = uiState.currentEvidenceStepIndex,
             totalSteps = uiState.evidenceSteps.size,
             recordedGps = recordedGps,
+            sharedPhotoGps = uiState.sharedPhotoGps,
             onBack = onBack,
             onPreviousStep = onPreviousStep,
             onFinish = onFinish,
@@ -141,20 +151,34 @@ private fun EvidencePhotoStepScreen(
     stepIndex: Int,
     totalSteps: Int,
     capturedPhoto: EvidencePhotoRecord?,
+    sharedPhotoGps: EvidenceGpsRecord?,
     onBack: () -> Unit,
     onPreviousStep: () -> Unit,
     onNextStep: () -> Unit,
     onPhotoRecorded: (EvidencePhotoRecord) -> Unit,
     onPhotoCleared: () -> Unit,
+    onSharedPhotoGpsUpdated: (EvidenceGpsRecord) -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val usesVisualStamp = step.applyVisualStamp
+    val requiresLocation = step.requiresLocation
+    val requiredPermissions = remember(requiresLocation) {
+        if (requiresLocation) {
+            arrayOf(
+                Manifest.permission.CAMERA,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            )
+        } else {
+            arrayOf(Manifest.permission.CAMERA)
+        }
+    }
     val mainExecutor = remember(context) { ContextCompat.getMainExecutor(context) }
     val previewView = remember(context) {
         PreviewView(context).apply {
-            scaleType = PreviewView.ScaleType.FILL_CENTER
+            scaleType = PreviewView.ScaleType.FIT_CENTER
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
         }
     }
@@ -165,10 +189,12 @@ private fun EvidencePhotoStepScreen(
     var isCapturing by rememberSaveable(step.id) { mutableStateOf(false) }
     var statusMessage by rememberSaveable(step.id) { mutableStateOf<String?>(null) }
     var imageCapture by remember(step.id) { mutableStateOf<ImageCapture?>(null) }
-    var locationStamp by remember(step.id) { mutableStateOf<LocationStamp?>(null) }
+    var locationStamp by remember(step.id) { mutableStateOf(sharedPhotoGps?.toLocationStamp()) }
     var isRefreshingLocation by rememberSaveable(step.id) { mutableStateOf(false) }
     var isGuideVisible by rememberSaveable(step.id) { mutableStateOf(false) }
     val guideImageResId = remember(step.id) { evidenceGuideImageResByStepId[step.id] }
+    val hasRequiredPermissions = hasCameraPermission && (!requiresLocation || hasLocationPermission)
+    val effectiveLocationStamp = locationStamp ?: sharedPhotoGps?.toLocationStamp()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -179,11 +205,13 @@ private fun EvidencePhotoStepScreen(
             result[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
             context.hasLocationPermission()
         hasRequestedPermissions = true
-        if (!hasCameraPermission || !hasLocationPermission) {
+        if (!hasCameraPermission || (requiresLocation && !hasLocationPermission)) {
             statusMessage = if (usesVisualStamp) {
                 "Izin kamera dan lokasi diperlukan agar foto bisa diberi timestamp dan GPS stamp."
-            } else {
+            } else if (requiresLocation) {
                 "Izin kamera dan lokasi diperlukan untuk mengambil foto evidence dan metadata lokasinya."
+            } else {
+                "Izin kamera diperlukan untuk mengambil foto evidence dokumen."
             }
         } else {
             statusMessage = null
@@ -191,6 +219,7 @@ private fun EvidencePhotoStepScreen(
     }
 
     fun refreshLocation() {
+        if (!requiresLocation) return
         if (!hasLocationPermission) {
             permissionLauncher.launch(
                 arrayOf(
@@ -208,6 +237,7 @@ private fun EvidencePhotoStepScreen(
                 resolveCurrentLocationStamp(context)
             }.onSuccess { stamp ->
                 locationStamp = stamp
+                onSharedPhotoGpsUpdated(stamp.toEvidenceGpsRecord())
                 statusMessage = null
             }.onFailure { error ->
                 statusMessage = error.message ?: "GPS belum berhasil didapatkan."
@@ -216,17 +246,21 @@ private fun EvidencePhotoStepScreen(
         }
     }
 
-    LaunchedEffect(step.id, hasCameraPermission, hasLocationPermission, hasRequestedPermissions) {
-        if ((!hasCameraPermission || !hasLocationPermission) && !hasRequestedPermissions) {
+    LaunchedEffect(step.id, sharedPhotoGps) {
+        locationStamp = sharedPhotoGps?.toLocationStamp()
+    }
+
+    LaunchedEffect(step.id, hasRequiredPermissions, hasLocationPermission, hasRequestedPermissions, capturedPhoto, sharedPhotoGps) {
+        if (!hasRequiredPermissions && !hasRequestedPermissions) {
             hasRequestedPermissions = true
-            permissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.CAMERA,
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                ),
-            )
-        } else if (capturedPhoto == null && hasLocationPermission && locationStamp == null && !isRefreshingLocation) {
+            permissionLauncher.launch(requiredPermissions)
+        } else if (
+            requiresLocation &&
+            capturedPhoto == null &&
+            hasLocationPermission &&
+            effectiveLocationStamp == null &&
+            !isRefreshingLocation
+        ) {
             refreshLocation()
         }
     }
@@ -248,10 +282,14 @@ private fun EvidencePhotoStepScreen(
                         "Kamera yang dibutuhkan tidak tersedia di perangkat ini."
                     }
 
-                    val preview = Preview.Builder().build().also { useCase ->
+                    val preview = Preview.Builder()
+                        .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                        .build()
+                        .also { useCase ->
                         useCase.setSurfaceProvider(previewView.getSurfaceProvider())
                     }
                     val capture = ImageCapture.Builder()
+                        .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                         .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                         .build()
 
@@ -293,12 +331,22 @@ private fun EvidencePhotoStepScreen(
                 .padding(horizontal = 20.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            TextButton(
-                onClick = {
-                    if (stepIndex == 0) onBack() else onPreviousStep()
-                },
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(text = "Kembali")
+                TextButton(
+                    onClick = {
+                        if (stepIndex == 0) onBack() else onPreviousStep()
+                    },
+                ) {
+                    Text(text = "Kembali")
+                }
+
+                if (guideImageResId != null) {
+                    GuideHintButton(onClick = { isGuideVisible = true })
+                }
             }
 
             Text(
@@ -317,47 +365,49 @@ private fun EvidencePhotoStepScreen(
                 color = Color.White.copy(alpha = 0.76f),
             )
 
-            if (guideImageResId != null) {
-                GuideHintButton(onClick = { isGuideVisible = true })
-            }
-
-            Surface(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                shape = RoundedCornerShape(28.dp),
-                color = Color.Black,
+                contentAlignment = Alignment.Center,
             ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    when {
-                        capturedPhoto != null -> {
-                            PhotoPreview(filePath = capturedPhoto.filePath, title = step.title)
-                        }
+                Surface(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .aspectRatio(
+                            ratio = photoPreviewAspectRatio,
+                            matchHeightConstraintsFirst = true,
+                        ),
+                    shape = RoundedCornerShape(28.dp),
+                    color = Color.Black,
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        when {
+                            capturedPhoto != null -> {
+                                PhotoPreview(filePath = capturedPhoto.filePath, title = step.title)
+                            }
 
-                        hasCameraPermission -> {
-                            AndroidView(
-                                factory = { previewView },
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
+                            hasCameraPermission -> {
+                                AndroidView(
+                                    factory = { previewView },
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
 
-                        else -> {
-                            PermissionState(
-                                message = if (usesVisualStamp) {
-                                    "Izin kamera dan lokasi dibutuhkan sebelum mengambil foto evidence."
-                                } else {
-                                    "Izin kamera dan lokasi dibutuhkan sebelum mengambil foto evidence dokumen."
-                                },
-                                onRequestPermission = {
-                                    permissionLauncher.launch(
-                                        arrayOf(
-                                            Manifest.permission.CAMERA,
-                                            Manifest.permission.ACCESS_FINE_LOCATION,
-                                            Manifest.permission.ACCESS_COARSE_LOCATION,
-                                        ),
-                                    )
-                                },
-                            )
+                            else -> {
+                                PermissionState(
+                                    message = if (usesVisualStamp) {
+                                        "Izin kamera dan lokasi dibutuhkan sebelum mengambil foto evidence."
+                                    } else if (requiresLocation) {
+                                        "Izin kamera dan lokasi dibutuhkan sebelum mengambil foto evidence dokumen."
+                                    } else {
+                                        "Izin kamera dibutuhkan sebelum mengambil foto dokumen."
+                                    },
+                                    onRequestPermission = {
+                                        permissionLauncher.launch(requiredPermissions)
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -377,22 +427,24 @@ private fun EvidencePhotoStepScreen(
                                 text = if (usesVisualStamp) {
                                     "Foto tersimpan dengan stamp waktu dan GPS."
                                 } else {
-                                    "Foto tersimpan tanpa stamp waktu dan GPS pada gambar."
+                                    "Foto tersimpan tanpa stamp GPS pada gambar."
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             Text(
                                 text = if (usesVisualStamp) {
                                     "Waktu: ${capturedPhoto.timestamp}\nGPS: ${"%.6f".format(capturedPhoto.latitude)}, ${"%.6f".format(capturedPhoto.longitude)}"
-                                } else {
+                                } else if (requiresLocation) {
                                     "Metadata capture:\nWaktu: ${capturedPhoto.timestamp}\nGPS: ${"%.6f".format(capturedPhoto.latitude)}, ${"%.6f".format(capturedPhoto.longitude)}"
+                                } else {
+                                    "Waktu: ${capturedPhoto.timestamp}"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
                             )
                         }
 
-                        locationStamp != null -> {
+                        requiresLocation && effectiveLocationStamp != null -> {
                             Text(
                                 text = if (usesVisualStamp) {
                                     "GPS siap untuk stamp foto."
@@ -403,12 +455,19 @@ private fun EvidencePhotoStepScreen(
                             )
                             Text(
                                 text = if (usesVisualStamp) {
-                                    "${"%.6f".format(locationStamp!!.latitude)}, ${"%.6f".format(locationStamp!!.longitude)}"
+                                    "${"%.6f".format(effectiveLocationStamp.latitude)}, ${"%.6f".format(effectiveLocationStamp.longitude)}"
                                 } else {
-                                    "Metadata lokasi siap: ${"%.6f".format(locationStamp!!.latitude)}, ${"%.6f".format(locationStamp!!.longitude)}"
+                                    "Metadata lokasi siap: ${"%.6f".format(effectiveLocationStamp.latitude)}, ${"%.6f".format(effectiveLocationStamp.longitude)}"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
+                            )
+                        }
+
+                        !requiresLocation -> {
+                            Text(
+                                text = "Dokumen ini tidak memerlukan GPS. Ambil foto agar isi dokumen tetap terbaca jelas.",
+                                style = MaterialTheme.typography.bodyMedium,
                             )
                         }
                     }
@@ -447,23 +506,25 @@ private fun EvidencePhotoStepScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            TicSecondaryButton(
-                                text = if (isRefreshingLocation) "Memuat GPS..." else "Refresh GPS",
-                                onClick = { refreshLocation() },
-                                enabled = !isRefreshingLocation && !isCapturing,
-                                modifier = Modifier.weight(1f),
-                                buttonHeight = compactPhotoActionButtonHeight,
-                            )
+                            if (requiresLocation) {
+                                TicSecondaryButton(
+                                    text = if (isRefreshingLocation) "Memuat GPS..." else "Refresh GPS",
+                                    onClick = { refreshLocation() },
+                                    enabled = !isRefreshingLocation && !isCapturing,
+                                    modifier = Modifier.weight(1f),
+                                    buttonHeight = compactPhotoActionButtonHeight,
+                                )
+                            }
                             TicPrimaryButton(
                                 text = if (isCapturing) "Menyimpan..." else "Ambil Foto",
                                 onClick = {
                                     val capture = imageCapture
-                                    val stamp = locationStamp
+                                    val stamp = effectiveLocationStamp
                                     if (capture == null) {
                                         statusMessage = "Kamera belum siap."
                                         return@TicPrimaryButton
                                     }
-                                    if (stamp == null) {
+                                    if (requiresLocation && stamp == null) {
                                         statusMessage = if (usesVisualStamp) {
                                             "GPS belum siap. Refresh lokasi dulu."
                                         } else {
@@ -496,21 +557,22 @@ private fun EvidencePhotoStepScreen(
                                                             processEvidencePhoto(
                                                                 filePath = outputFile.absolutePath,
                                                                 locationStamp = if (usesVisualStamp) {
-                                                                    stamp.copy(timestampDisplay = captureTimestamp)
+                                                                    stamp?.copy(timestampDisplay = captureTimestamp)
                                                                 } else {
                                                                     null
                                                                 },
                                                             )
                                                         }
                                                     }.onSuccess {
+                                                        val metadataStamp = stamp
                                                         onPhotoRecorded(
                                                             EvidencePhotoRecord(
                                                                 filePath = outputFile.absolutePath,
                                                                 timestamp = captureTimestamp,
-                                                                latitude = stamp.latitude,
-                                                                longitude = stamp.longitude,
-                                                                accuracyMeters = stamp.accuracyMeters,
-                                                                address = stamp.address,
+                                                                latitude = metadataStamp?.latitude ?: 0.0,
+                                                                longitude = metadataStamp?.longitude ?: 0.0,
+                                                                accuracyMeters = metadataStamp?.accuracyMeters,
+                                                                address = metadataStamp?.address.orEmpty(),
                                                             ),
                                                         )
                                                         statusMessage = null
@@ -533,9 +595,8 @@ private fun EvidencePhotoStepScreen(
                                 enabled = !isRefreshingLocation &&
                                     !isCapturing &&
                                     hasCameraPermission &&
-                                    hasLocationPermission &&
                                     imageCapture != null &&
-                                    locationStamp != null,
+                                    (!requiresLocation || effectiveLocationStamp != null),
                                 modifier = Modifier.weight(1f),
                                 buttonHeight = compactPhotoActionButtonHeight,
                             )
@@ -553,6 +614,7 @@ private fun EvidenceGpsStepScreen(
     stepIndex: Int,
     totalSteps: Int,
     recordedGps: EvidenceGpsRecord?,
+    sharedPhotoGps: EvidenceGpsRecord?,
     onBack: () -> Unit,
     onPreviousStep: () -> Unit,
     onFinish: () -> Unit,
@@ -563,7 +625,7 @@ private fun EvidenceGpsStepScreen(
     var hasLocationPermission by remember { mutableStateOf(context.hasLocationPermission()) }
     var hasRequestedPermission by rememberSaveable(step.id) { mutableStateOf(false) }
     var statusMessage by rememberSaveable(step.id) { mutableStateOf<String?>(null) }
-    var currentLocationStamp by remember(step.id) { mutableStateOf<LocationStamp?>(null) }
+    var currentLocationStamp by remember(step.id) { mutableStateOf(sharedPhotoGps?.toLocationStamp()) }
     var isRefreshingLocation by rememberSaveable(step.id) { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -602,7 +664,13 @@ private fun EvidenceGpsStepScreen(
         }
     }
 
-    LaunchedEffect(step.id, hasLocationPermission, hasRequestedPermission) {
+    LaunchedEffect(step.id, sharedPhotoGps) {
+        if (recordedGps == null) {
+            currentLocationStamp = sharedPhotoGps?.toLocationStamp()
+        }
+    }
+
+    LaunchedEffect(step.id, hasLocationPermission, hasRequestedPermission, sharedPhotoGps) {
         if (!hasLocationPermission && !hasRequestedPermission) {
             hasRequestedPermission = true
             permissionLauncher.launch(
@@ -611,7 +679,13 @@ private fun EvidenceGpsStepScreen(
                     Manifest.permission.ACCESS_COARSE_LOCATION,
                 ),
             )
-        } else if (hasLocationPermission && currentLocationStamp == null && recordedGps == null && !isRefreshingLocation) {
+        } else if (
+            hasLocationPermission &&
+            currentLocationStamp == null &&
+            recordedGps == null &&
+            sharedPhotoGps == null &&
+            !isRefreshingLocation
+        ) {
             refreshLocation()
         }
     }
@@ -734,18 +808,23 @@ private fun GuideHintButton(
 ) {
     OutlinedButton(
         onClick = onClick,
+        modifier = Modifier.height(38.dp),
         shape = RoundedCornerShape(18.dp),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = Color.White,
+        ),
     ) {
         Icon(
             imageVector = Icons.Outlined.Lightbulb,
             contentDescription = null,
             tint = Color(0xFFFFC857),
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(16.dp),
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = "Petunjuk Foto",
-            style = MaterialTheme.typography.labelLarge,
+            text = "Petunjuk",
+            style = MaterialTheme.typography.labelMedium,
         )
     }
 }
@@ -785,7 +864,7 @@ private fun EvidenceGuideDialog(
                             style = MaterialTheme.typography.titleLarge,
                         )
                         Text(
-                            text = "Cocokkan hasil foto dengan contoh ini sebelum menekan Ambil Foto.",
+                            text = "Pastikan pengambilan foto sesuai dengan syarat yang ketentuan.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                         )
@@ -963,4 +1042,24 @@ private fun Bitmap.applyExifRotation(filePath: String): Bitmap {
         recycle()
     }
     return rotatedBitmap
+}
+
+private fun LocationStamp.toEvidenceGpsRecord(): EvidenceGpsRecord {
+    return EvidenceGpsRecord(
+        timestamp = timestampDisplay,
+        latitude = latitude,
+        longitude = longitude,
+        accuracyMeters = accuracyMeters,
+        address = address,
+    )
+}
+
+private fun EvidenceGpsRecord.toLocationStamp(): LocationStamp {
+    return LocationStamp(
+        latitude = latitude,
+        longitude = longitude,
+        accuracyMeters = accuracyMeters,
+        address = address,
+        timestampDisplay = timestamp,
+    )
 }

@@ -4,9 +4,13 @@ enum class RegistrationStatus {
     NOT_REGISTERED,
     PENDING,
     APPROVED,
+    APPROVEDV2,
     REJECTED,
     SUSPENDED,
 }
+
+val RegistrationStatus.isApprovedAccess: Boolean
+    get() = this == RegistrationStatus.APPROVED || this == RegistrationStatus.APPROVEDV2
 
 data class AuthenticatedUser(
     val uid: String,
