@@ -546,22 +546,59 @@ function escapeGoogleDriveQueryValue(value) {
     .replace(/'/g, "\\'");
 }
 
-async function uploadBufferToGoogleDrive({ buffer, fileName, mimeType, parentFolderId }) {
+async function findGoogleDriveChildFile({
+  parentFolderId,
+  fileName,
+  mimeType = "",
+}) {
+  const normalizedParentId = normalizeString(parentFolderId);
+  const normalizedFileName = normalizeString(fileName);
+  if (!normalizedParentId || !normalizedFileName) {
+    return null;
+  }
+
+  const queryParts = [
+    `'${escapeGoogleDriveQueryValue(normalizedParentId)}' in parents`,
+    `name = '${escapeGoogleDriveQueryValue(normalizedFileName)}'`,
+    "trashed = false",
+    "mimeType != 'application/vnd.google-apps.folder'",
+  ];
+
+  if (normalizeString(mimeType)) {
+    queryParts.push(`mimeType = '${escapeGoogleDriveQueryValue(normalizeString(mimeType))}'`);
+  }
+
+  const [existingFile] = await listGoogleDriveFiles({
+    query: queryParts.join(" and "),
+    pageSize: 1,
+  });
+
+  return existingFile && normalizeString(existingFile.id) ? existingFile : null;
+}
+
+async function uploadBufferToGoogleDrive({ buffer, fileName, mimeType, parentFolderId, existingFileId = "" }) {
   ensureGoogleDriveConfig();
 
   const token = await getGoogleDriveAccessToken();
-  const initUrl = new URL(googleDriveConfig.uploadBaseUrl);
+  const normalizedExistingFileId = normalizeString(existingFileId);
+  const initUrl = new URL(
+    normalizedExistingFileId
+      ? `${googleDriveConfig.uploadBaseUrl}/${encodeURIComponent(normalizedExistingFileId)}`
+      : googleDriveConfig.uploadBaseUrl,
+  );
   initUrl.searchParams.set("uploadType", "resumable");
   initUrl.searchParams.set("supportsAllDrives", "true");
   initUrl.searchParams.set("fields", "id,name,mimeType,size");
 
-  const metadata = {
-    name: fileName,
-    parents: [parentFolderId],
-  };
+  const metadata = normalizedExistingFileId
+    ? { name: fileName }
+    : {
+      name: fileName,
+      parents: [parentFolderId],
+    };
 
   const initResponse = await fetch(initUrl, {
-    method: "POST",
+    method: normalizedExistingFileId ? "PATCH" : "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json; charset=UTF-8",
@@ -859,9 +896,8 @@ async function runGoogleDriveFolderCheck(kind) {
 
 function buildRegistrationStorageFileName(uid, assetType, originalFileName, mimeType) {
   const extension = getUploadExtension(originalFileName, mimeType);
-  const timestamp = Date.now();
   const safeUid = sanitizePathSegment(uid, "unknown_uid");
-  return `${safeUid}_${assetType}_${timestamp}${extension}`;
+  return `${safeUid}_${assetType}${extension}`;
 }
 
 function buildSubmissionStorageFileName(uid, submissionId, index, originalFileName, mimeType) {
@@ -1020,6 +1056,246 @@ function isAdminAuthenticated(req) {
 function normalizeAssetUrl(value) {
   const normalized = normalizeString(value);
   return normalized || null;
+}
+
+function isGoogleDriveProxyUrl(value) {
+  return normalizeString(value).startsWith("/uploads/google-drive/");
+}
+
+function isLocalUploadsProxyUrl(value) {
+  return normalizeString(value).startsWith("/uploads/");
+}
+
+function resolveUploadsProxyUrlToLocalPath(value) {
+  const normalized = normalizeString(value);
+  if (!isLocalUploadsProxyUrl(normalized) || isGoogleDriveProxyUrl(normalized)) {
+    return "";
+  }
+
+  const relativePath = normalized.replace(/^\/uploads\//, "");
+  const normalizedUploadsDir = path.resolve(uploadsDir);
+  const resolvedPath = path.resolve(uploadsDir, relativePath);
+  const allowedPrefix = `${normalizedUploadsDir}${path.sep}`;
+
+  if (resolvedPath === normalizedUploadsDir || !resolvedPath.startsWith(allowedPrefix)) {
+    return "";
+  }
+
+  return resolvedPath;
+}
+
+async function migrateRegistrationAssetToGoogleDrive({
+  assetUrl,
+  assetType,
+  uid,
+  dryRun = true,
+}) {
+  const normalizedAssetUrl = normalizeString(assetUrl);
+  if (!normalizedAssetUrl) {
+    return {
+      status: "empty",
+      assetType,
+      fromUrl: null,
+      toUrl: null,
+      fileName: null,
+      message: "Field asset kosong.",
+    };
+  }
+
+  if (isGoogleDriveProxyUrl(normalizedAssetUrl)) {
+    return {
+      status: "already-google-drive",
+      assetType,
+      fromUrl: normalizedAssetUrl,
+      toUrl: normalizedAssetUrl,
+      fileName: null,
+      message: "Asset sudah mengarah ke Google Drive.",
+    };
+  }
+
+  const localPath = resolveUploadsProxyUrlToLocalPath(normalizedAssetUrl);
+  if (!localPath) {
+    return {
+      status: "unsupported",
+      assetType,
+      fromUrl: normalizedAssetUrl,
+      toUrl: null,
+      fileName: null,
+      message: "URL asset bukan file lokal backend yang bisa dimigrasikan.",
+    };
+  }
+
+  try {
+    await fs.access(localPath);
+  } catch {
+    return {
+      status: "missing-local-file",
+      assetType,
+      fromUrl: normalizedAssetUrl,
+      toUrl: null,
+      fileName: path.basename(localPath),
+      message: `File lokal tidak ditemukan: ${localPath}`,
+    };
+  }
+
+  const fileName = path.basename(localPath) || buildRegistrationStorageFileName(uid, assetType, "", "");
+  const mimeType = normalizeString(staticContentTypes[path.extname(fileName).toLowerCase()]).split(";")[0] || "application/octet-stream";
+
+  if (dryRun) {
+    return {
+      status: "planned",
+      assetType,
+      fromUrl: normalizedAssetUrl,
+      toUrl: null,
+      fileName,
+      message: "Asset siap dimigrasikan ke Google Drive.",
+    };
+  }
+
+  const parentFolderId = getGoogleDriveFolderId("registration");
+  const existingFile = await findGoogleDriveChildFile({
+    parentFolderId,
+    fileName,
+  });
+  const buffer = await fs.readFile(localPath);
+  const uploadResult = await uploadBufferToGoogleDrive({
+    buffer,
+    fileName,
+    mimeType,
+    parentFolderId,
+    existingFileId: normalizeString(existingFile?.id),
+  });
+  const migratedUrl = createGoogleDriveProxyUrl(uploadResult.id, uploadResult.name);
+
+  return {
+    status: existingFile?.id ? "updated-google-drive" : "uploaded-google-drive",
+    assetType,
+    fromUrl: normalizedAssetUrl,
+    toUrl: migratedUrl,
+    fileName: uploadResult.name || fileName,
+    message: existingFile?.id
+      ? "Asset lokal berhasil mengganti file yang sudah ada di Google Drive."
+      : "Asset lokal berhasil diupload ke Google Drive.",
+  };
+}
+
+async function migrateRegistrationsToGoogleDrive({ dryRun = true, limit = 0 } = {}) {
+  ensureGoogleDriveConfig();
+
+  const items = await readRegistrations();
+  const normalizedLimit = normalizeNonNegativeInteger(limit);
+  const targetItems = normalizedLimit ? items.slice(0, normalizedLimit) : items;
+  const summary = {
+    dryRun,
+    totalRegistrations: items.length,
+    scannedRegistrations: targetItems.length,
+    migratedRegistrations: 0,
+    migratedAssets: 0,
+    alreadyGoogleDriveAssets: 0,
+    plannedAssets: 0,
+    missingLocalFiles: 0,
+    unsupportedAssets: 0,
+    emptyAssets: 0,
+    errors: 0,
+    wroteRegistrationsFile: false,
+  };
+  const details = [];
+  let hasChanges = false;
+
+  for (const record of targetItems) {
+    const assetEntries = [
+      ["ktpDriveFileId", "ktp"],
+      ["selfieDriveFileId", "selfie"],
+    ];
+    const assetResults = [];
+    let recordChanged = false;
+
+    for (const [fieldName, assetType] of assetEntries) {
+      try {
+        const assetResult = await migrateRegistrationAssetToGoogleDrive({
+          assetUrl: record[fieldName],
+          assetType,
+          uid: record.uid,
+          dryRun,
+        });
+        assetResults.push({
+          fieldName,
+          ...assetResult,
+        });
+
+        if (assetResult.status === "empty") {
+          summary.emptyAssets += 1;
+          continue;
+        }
+
+        if (assetResult.status === "already-google-drive") {
+          summary.alreadyGoogleDriveAssets += 1;
+          continue;
+        }
+
+        if (assetResult.status === "planned") {
+          summary.plannedAssets += 1;
+          continue;
+        }
+
+        if (assetResult.status === "missing-local-file") {
+          summary.missingLocalFiles += 1;
+          continue;
+        }
+
+        if (assetResult.status === "unsupported") {
+          summary.unsupportedAssets += 1;
+          continue;
+        }
+
+        if (assetResult.status === "uploaded-google-drive" || assetResult.status === "updated-google-drive") {
+          record[fieldName] = assetResult.toUrl;
+          summary.migratedAssets += 1;
+          recordChanged = true;
+          continue;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        summary.errors += 1;
+        assetResults.push({
+          fieldName,
+          status: "error",
+          assetType,
+          fromUrl: normalizeString(record[fieldName]) || null,
+          toUrl: null,
+          fileName: null,
+          message,
+        });
+      }
+    }
+
+    if (recordChanged) {
+      summary.migratedRegistrations += 1;
+      record.updatedAt = new Date().toISOString();
+      hasChanges = true;
+    }
+
+    if (assetResults.some((item) => item.status !== "empty")) {
+      details.push({
+        registrationId: record.registrationId,
+        uid: record.uid,
+        nama: record.nama || null,
+        gmail: record.gmail || null,
+        assets: assetResults,
+      });
+    }
+  }
+
+  if (hasChanges && !dryRun) {
+    await writeRegistrations(items);
+    summary.wroteRegistrationsFile = true;
+  }
+
+  return {
+    ok: true,
+    summary,
+    items: details,
+  };
 }
 
 function buildRegistrationRecord(body) {
@@ -1256,6 +1532,7 @@ async function storeSubmissionFiles(uid, submissionId, files, googleDriveParentF
   const safeSubmissionId = sanitizePathSegment(submissionId, `submission_${Date.now()}`);
   const useGoogleDrive = isGoogleDriveStorageEnabled();
   const targetDir = path.join(uploadsDir, "submissions", safeUid, safeSubmissionId);
+  const targetGoogleDriveParentFolderId = normalizeString(googleDriveParentFolderId) || getGoogleDriveFolderId("submission");
   if (!useGoogleDrive) {
     await fs.mkdir(targetDir, { recursive: true });
   }
@@ -1276,11 +1553,16 @@ async function storeSubmissionFiles(uid, submissionId, files, googleDriveParentF
           originalFileName,
           file.mimeType,
         );
+        const existingFile = await findGoogleDriveChildFile({
+          parentFolderId: targetGoogleDriveParentFolderId,
+          fileName: storedFileName,
+        });
         const uploadResult = await uploadBufferToGoogleDrive({
           buffer: Buffer.from(base64Data, "base64"),
           fileName: storedFileName,
           mimeType: normalizeString(file.mimeType) || "image/jpeg",
-          parentFolderId: normalizeString(googleDriveParentFolderId) || getGoogleDriveFolderId("submission"),
+          parentFolderId: targetGoogleDriveParentFolderId,
+          existingFileId: normalizeString(existingFile?.id),
         });
         fileUrl = createGoogleDriveProxyUrl(uploadResult.id, uploadResult.name);
       } else {
@@ -1316,11 +1598,17 @@ async function storeRegistrationAsset(body) {
 
   let fileUrl;
   if (isGoogleDriveStorageEnabled()) {
+    const parentFolderId = getGoogleDriveFolderId("registration");
+    const existingFile = await findGoogleDriveChildFile({
+      parentFolderId,
+      fileName: safeFileName,
+    });
     const uploadResult = await uploadBufferToGoogleDrive({
       buffer: Buffer.from(normalizeString(body.base64Data), "base64"),
       fileName: safeFileName,
       mimeType: normalizeString(body.mimeType) || "image/jpeg",
-      parentFolderId: getGoogleDriveFolderId("registration"),
+      parentFolderId,
+      existingFileId: normalizeString(existingFile?.id),
     });
     fileUrl = createGoogleDriveProxyUrl(uploadResult.id, uploadResult.name);
   } else {
@@ -1720,6 +2008,32 @@ async function handleApi(req, res, url) {
 
     result.ok = Boolean(result.registration?.ok && result.submission?.ok);
     sendJson(res, result.ok ? 200 : 500, result);
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/google-drive/migrate-registrations") {
+    let body = {};
+    try {
+      body = await readJsonBody(req);
+    } catch {
+      body = {};
+    }
+
+    const dryRun = body.dryRun !== false;
+    const limit = normalizeNonNegativeInteger(body.limit);
+
+    try {
+      const result = await migrateRegistrationsToGoogleDrive({ dryRun, limit });
+      sendJson(res, 200, result);
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      const statusCode = /belum diaktifkan|wajib diisi/i.test(details) ? 409 : 500;
+      sendJson(res, statusCode, {
+        ok: false,
+        error: "Migrasi registrasi ke Google Drive gagal dijalankan.",
+        details,
+      });
+    }
     return;
   }
 

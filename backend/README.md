@@ -91,6 +91,35 @@ Catatan penting:
 - persistent disk Render masih dipakai untuk file JSON data (`registrations.json`, `submissions.json`, `school_master.json`), tetapi foto tidak lagi menumpuk di disk lokal
 - di Render, Secret File tersedia di path `/etc/secrets/<filename>` menurut dokumentasi resmi Render
 
+Kalau Anda punya data registrasi lama yang masih menyimpan KTP/selfie di disk lokal Render, backend ini juga menyediakan endpoint migrasi:
+
+```http
+POST /api/admin/google-drive/migrate-registrations
+```
+
+Contoh `dry run` dulu:
+
+```json
+{
+  "dryRun": true,
+  "limit": 20
+}
+```
+
+Contoh migrasi sungguhan:
+
+```json
+{
+  "dryRun": false
+}
+```
+
+Catatan:
+
+- endpoint ini hanya memigrasikan field registrasi `ktpDriveFileId` dan `selfieDriveFileId`
+- file lokal lama **tidak dihapus otomatis**, jadi aman untuk verifikasi dulu
+- record yang sudah memakai URL `/uploads/google-drive/...` akan dilewati
+
 ## Cara Menjalankan
 
 ```bash

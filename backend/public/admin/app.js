@@ -51,6 +51,7 @@ const ui = {
   masterUploadButton: document.getElementById("masterUploadButton"),
   masterRefreshButton: document.getElementById("masterRefreshButton"),
   masterDriveCheckButton: document.getElementById("masterDriveCheckButton"),
+  masterMigrateRegistrationsButton: document.getElementById("masterMigrateRegistrationsButton"),
   masterUploadStatus: document.getElementById("masterUploadStatus"),
   masterDataInfo: document.getElementById("masterDataInfo"),
   masterColumnsValue: document.getElementById("masterColumnsValue"),
@@ -288,6 +289,99 @@ async function runGoogleDriveCheck() {
     setMasterUploadState(message, "error");
     showError(message);
   } finally {
+    ui.masterDriveCheckButton.disabled = false;
+  }
+}
+
+function formatRegistrationMigrationMessage(payload) {
+  const summary = payload?.summary || {};
+  const scannedRegistrations = Number(summary.scannedRegistrations) || 0;
+  const migratedRegistrations = Number(summary.migratedRegistrations) || 0;
+  const migratedAssets = Number(summary.migratedAssets) || 0;
+  const plannedAssets = Number(summary.plannedAssets) || 0;
+  const alreadyGoogleDriveAssets = Number(summary.alreadyGoogleDriveAssets) || 0;
+  const missingLocalFiles = Number(summary.missingLocalFiles) || 0;
+  const unsupportedAssets = Number(summary.unsupportedAssets) || 0;
+  const errors = Number(summary.errors) || 0;
+
+  if (summary.dryRun) {
+    return [
+      `Dry run selesai: ${scannedRegistrations} registrasi diperiksa.`,
+      `${plannedAssets} asset siap dimigrasikan.`,
+      `${alreadyGoogleDriveAssets} asset sudah di Google Drive.`,
+      `${missingLocalFiles} file lokal hilang.`,
+      `${unsupportedAssets} URL tidak didukung.`,
+      `${errors} error.`,
+    ].join(" ");
+  }
+
+  return [
+    `Migrasi selesai: ${migratedRegistrations} registrasi diperbarui.`,
+    `${migratedAssets} asset berhasil dipindahkan ke Google Drive.`,
+    `${missingLocalFiles} file lokal hilang.`,
+    `${unsupportedAssets} URL tidak didukung.`,
+    `${errors} error.`,
+  ].join(" ");
+}
+
+async function requestRegistrationMigration(body) {
+  return fetchJson("/api/admin/google-drive/migrate-registrations", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+async function runRegistrationMigration() {
+  hideError();
+  setMasterUploadState("Menyiapkan pengecekan migrasi registrasi lama...", "saving");
+  ui.masterMigrateRegistrationsButton.disabled = true;
+  ui.masterDriveCheckButton.disabled = true;
+
+  try {
+    const { response: dryRunResponse, payload: dryRunPayload } = await requestRegistrationMigration({
+      dryRun: true,
+    });
+    const dryRunMessage = formatRegistrationMigrationMessage(dryRunPayload);
+
+    if (!dryRunResponse.ok || !dryRunPayload?.ok) {
+      throw new Error(dryRunPayload?.details || dryRunPayload?.error || dryRunMessage);
+    }
+
+    const plannedAssets = Number(dryRunPayload?.summary?.plannedAssets) || 0;
+    if (!plannedAssets) {
+      setMasterUploadState(dryRunMessage, "saved");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `${dryRunMessage}\n\nLanjut migrasi sekarang? File lokal lama tidak akan dihapus otomatis.`,
+    );
+    if (!confirmed) {
+      setMasterUploadState("Dry run selesai. Migrasi dibatalkan oleh admin.", "dirty");
+      return;
+    }
+
+    setMasterUploadState("Mengupload asset registrasi lama ke Google Drive...", "saving");
+    const { response, payload } = await requestRegistrationMigration({
+      dryRun: false,
+    });
+    const message = formatRegistrationMigrationMessage(payload);
+
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.details || payload?.error || message);
+    }
+
+    setMasterUploadState(message, "saved");
+    await loadRegistrations();
+  } catch (error) {
+    const message = error.message || "Migrasi registrasi lama belum berhasil dijalankan.";
+    setMasterUploadState(message, "error");
+    showError(message);
+  } finally {
+    ui.masterMigrateRegistrationsButton.disabled = false;
     ui.masterDriveCheckButton.disabled = false;
   }
 }
@@ -2658,6 +2752,7 @@ ui.rawSearchInput.addEventListener("input", () => renderSubmissionRows(uploadIte
 ui.masterUploadButton.addEventListener("click", uploadMasterDataExcel);
 ui.masterRefreshButton.addEventListener("click", loadMasterDataInfo);
 ui.masterDriveCheckButton.addEventListener("click", runGoogleDriveCheck);
+ui.masterMigrateRegistrationsButton.addEventListener("click", runRegistrationMigration);
 ui.masterFileInput.addEventListener("change", () => {
   const file = ui.masterFileInput.files?.[0];
   setMasterUploadState(file ? `Siap upload: ${file.name}` : "Belum ada file dipilih.", file ? "dirty" : "");
