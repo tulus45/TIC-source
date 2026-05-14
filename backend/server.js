@@ -32,6 +32,9 @@ const androidAppVersionFile = path.resolve(rootDir, "..", "app", "version.proper
 const androidAppReleaseMetadataFile = path.resolve(rootDir, "..", "app", "release.properties");
 const bundledSchoolMasterFile = path.join(rootDir, "data", "school_master.json");
 const schoolMasterFile = path.join(dataDir, "school_master.json");
+const configuredPublicBaseUrl = typeof process.env.TIC_PUBLIC_BASE_URL === "string"
+  ? process.env.TIC_PUBLIC_BASE_URL.trim()
+  : "";
 const adminSessionCookieName = "tic_admin_session";
 const adminSessionMaxAgeMs = 1000 * 60 * 60 * 12;
 const defaultAdminUsername = "admin";
@@ -500,6 +503,62 @@ function sendRedirect(res, location, extraHeaders = {}) {
     ...extraHeaders,
   });
   res.end();
+}
+
+function getForwardedHost(req) {
+  const forwardedHost = typeof req.headers["x-forwarded-host"] === "string"
+    ? req.headers["x-forwarded-host"]
+    : "";
+  return normalizeString(forwardedHost.split(",")[0]);
+}
+
+function getRequestOrigin(req) {
+  if (configuredPublicBaseUrl) {
+    return configuredPublicBaseUrl.replace(/\/+$/, "");
+  }
+
+  const protocol = isSecureRequest(req) ? "https" : "http";
+  const host = getForwardedHost(req) || normalizeString(req.headers.host) || `${HOST}:${PORT}`;
+  return `${protocol}://${host}`.replace(/\/+$/, "");
+}
+
+function buildLatestApkDownloadProxyUrl(req) {
+  return `${getRequestOrigin(req)}/downloads/latest.apk`;
+}
+
+function serializeAppReleasePolicyForClient(req, policy) {
+  const sourceUpdateUrl = normalizeString(policy?.updateUrl);
+  return {
+    ...policy,
+    updateUrl: sourceUpdateUrl ? buildLatestApkDownloadProxyUrl(req) : null,
+  };
+}
+
+function isLatestApkProxyUrl(value) {
+  const normalized = normalizeString(value);
+  if (!normalized) {
+    return false;
+  }
+
+  if (normalized === "/downloads/latest.apk") {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    return parsed.pathname === "/downloads/latest.apk";
+  } catch {
+    return false;
+  }
+}
+
+function resolveLatestApkDownloadTarget(policy) {
+  const targetUrl = normalizeString(policy?.updateUrl);
+  if (!targetUrl || isLatestApkProxyUrl(targetUrl)) {
+    return "";
+  }
+
+  return targetUrl;
 }
 
 async function sendStatic(res, relativePath) {
@@ -2436,7 +2495,7 @@ async function handleApi(req, res, url) {
 
     sendJson(res, 200, {
       ...toUserProfile(record),
-      appReleasePolicy,
+      appReleasePolicy: serializeAppReleasePolicyForClient(req, appReleasePolicy),
     });
     return;
   }
@@ -2505,7 +2564,7 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/app-release-policy") {
     try {
       const policy = await readAppReleasePolicy();
-      sendJson(res, 200, policy);
+      sendJson(res, 200, serializeAppReleasePolicyForClient(req, policy));
     } catch (error) {
       sendJson(res, 500, {
         error: "Policy versi aplikasi belum bisa dibaca.",
@@ -2749,7 +2808,7 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/admin/app-release-policy") {
     try {
       const policy = await readAppReleasePolicy();
-      sendJson(res, 200, policy);
+      sendJson(res, 200, serializeAppReleasePolicyForClient(req, policy));
     } catch (error) {
       sendJson(res, 500, {
         error: "Policy versi aplikasi belum bisa dibaca.",
@@ -2769,7 +2828,7 @@ async function handleApi(req, res, url) {
 
     try {
       const savedPolicy = await writeAppReleasePolicy(body);
-      sendJson(res, 200, savedPolicy);
+      sendJson(res, 200, serializeAppReleasePolicyForClient(req, savedPolicy));
     } catch (error) {
       sendJson(res, 500, {
         error: "Policy versi aplikasi belum bisa disimpan.",
@@ -3001,6 +3060,19 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname.startsWith("/api/")) {
       await handleApi(req, res, url);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/downloads/latest.apk") {
+      const policy = await readAppReleasePolicy();
+      const redirectTarget = resolveLatestApkDownloadTarget(policy);
+
+      if (!redirectTarget) {
+        sendText(res, 404, "Link download APK terbaru belum tersedia.");
+        return;
+      }
+
+      sendRedirect(res, redirectTarget);
       return;
     }
 

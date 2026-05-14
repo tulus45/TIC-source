@@ -114,11 +114,21 @@ Field utama policy:
 Version code, label release, dan link download sekarang bisa dibuat otomatis dari pipeline GitHub Releases.
 Yang tetap bisa diedit dari panel admin hanyalah `updateMessage`.
 
-Link stabil yang dipakai APK adalah format:
+Link yang dibagikan ke APK sekarang sebaiknya memakai endpoint backend:
+
+```text
+https://<domain-backend-anda>/downloads/latest.apk
+```
+
+Endpoint itu akan me-redirect ke GitHub Releases terbaru. Target GitHub stabil di belakangnya tetap format:
 
 ```text
 https://github.com/<owner>/<repo>/releases/latest/download/tic-latest.apk
 ```
+
+Kalau backend Anda diakses lewat domain publik/proxy tertentu, isi environment variable berikut agar URL yang dikirim ke APK selalu benar:
+
+- `TIC_PUBLIC_BASE_URL`
 
 Jika Anda ingin publish APK otomatis ke GitHub Releases, tambahkan GitHub Actions dan secret signing Android berikut:
 
