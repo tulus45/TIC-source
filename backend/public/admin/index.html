@@ -185,22 +185,25 @@
             <div class="hero__badge hero__badge--light">Gate APK Approved</div>
             <h2>Batasi Home hanya untuk APK release terbaru</h2>
             <p>
-              User dengan status approved tetap harus memakai APK versi yang Anda tentukan di sini sebelum menu utama dibuka.
+              User dengan status approved tetap harus memakai APK release terbaru yang terdeteksi otomatis dari hasil build sebelum menu utama dibuka.
+            </p>
+            <p class="release-policy-note">
+              Version code dan label release mengikuti build APK terbaru secara otomatis. Kolom versi di bawah hanya untuk dilihat.
             </p>
           </div>
 
           <div class="release-policy-grid">
             <label class="release-policy-field">
               <span>Version Code Wajib</span>
-              <input id="appReleaseMinimumVersionCodeInput" type="number" min="0" step="1" inputmode="numeric" />
+              <input id="appReleaseMinimumVersionCodeInput" type="number" min="0" step="1" inputmode="numeric" readonly />
             </label>
             <label class="release-policy-field">
               <span>Version Code Latest</span>
-              <input id="appReleaseLatestVersionCodeInput" type="number" min="0" step="1" inputmode="numeric" />
+              <input id="appReleaseLatestVersionCodeInput" type="number" min="0" step="1" inputmode="numeric" readonly />
             </label>
             <label class="release-policy-field">
               <span>Label Release</span>
-              <input id="appReleaseLatestVersionNameInput" type="text" placeholder="Contoh: 0.2.0" />
+              <input id="appReleaseLatestVersionNameInput" type="text" placeholder="Otomatis dari build APK" readonly />
             </label>
             <label class="release-policy-field">
               <span>Link Update APK</span>
@@ -213,7 +216,7 @@
           </div>
 
           <div class="release-policy-actions">
-            <button id="appReleaseSaveButton" class="button button--primary" type="button">Simpan Aturan APK</button>
+            <button id="appReleaseSaveButton" class="button button--primary" type="button">Simpan Info Update APK</button>
             <div id="appReleasePolicyStatus" class="master-panel__status">Memuat policy versi aplikasi...</div>
           </div>
           <div id="appReleasePolicyInfo" class="master-panel__info">Policy versi aplikasi belum dimuat.</div>

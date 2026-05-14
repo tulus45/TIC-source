@@ -980,6 +980,12 @@ a {
   font-size: 13px;
 }
 
+.release-policy-note {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 .release-policy-field input,
 .release-policy-field textarea {
   width: 100%;
@@ -989,6 +995,12 @@ a {
   border-radius: 16px;
   background: var(--surface-strong);
   color: var(--ink);
+}
+
+.release-policy-field input[readonly] {
+  background: rgba(236, 242, 248, 0.96);
+  color: rgba(24, 42, 58, 0.88);
+  cursor: default;
 }
 
 .release-policy-field textarea {

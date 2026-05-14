@@ -265,13 +265,14 @@ function renderAppReleasePolicy(payload, errorMessage = "") {
   ui.appReleaseMinimumVersionCodeInput.value = String(Number(policy.minimumApprovedVersionCode) || 0);
   ui.appReleaseLatestVersionCodeInput.value = String(Number(policy.latestVersionCode) || 0);
   ui.appReleaseLatestVersionNameInput.value = policy.latestVersionName || "";
+  ui.appReleaseMinimumVersionCodeInput.readOnly = true;
+  ui.appReleaseLatestVersionCodeInput.readOnly = true;
+  ui.appReleaseLatestVersionNameInput.readOnly = true;
   ui.appReleaseUpdateUrlInput.value = policy.updateUrl || "";
   ui.appReleaseUpdateMessageInput.value = policy.updateMessage || "";
   const latestReleaseLabel = policy.latestVersionName || policy.latestVersionCode || "-";
   const detectedReleaseLabel = policy.detectedVersionName || policy.detectedVersionCode || "-";
-  const sourceLabel = policy.mode === "manual"
-    ? "override manual dari panel admin"
-    : "otomatis dari versi APK source/backend";
+  const sourceLabel = "otomatis dari build APK terbaru";
   ui.appReleasePolicyInfo.textContent = errorMessage || (
     payload
       ? `Policy aktif diperbarui ${policy.updatedAt ? formatDate(policy.updatedAt) : "-"}.
@@ -308,7 +309,7 @@ async function loadMasterPanelData() {
 
 async function saveAppReleasePolicy() {
   hideError();
-  setAppReleasePolicyState("Menyimpan policy versi aplikasi...", "saving");
+  setAppReleasePolicyState("Menyimpan info update APK...", "saving");
   ui.appReleaseSaveButton.disabled = true;
 
   try {
@@ -318,24 +319,21 @@ async function saveAppReleasePolicy() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        mode: "manual",
-        minimumApprovedVersionCode: normalizeNonNegativeInteger(ui.appReleaseMinimumVersionCodeInput.value),
-        latestVersionCode: normalizeNonNegativeInteger(ui.appReleaseLatestVersionCodeInput.value),
-        latestVersionName: ui.appReleaseLatestVersionNameInput.value.trim(),
+        mode: "auto",
         updateUrl: ui.appReleaseUpdateUrlInput.value.trim(),
         updateMessage: ui.appReleaseUpdateMessageInput.value.trim(),
       }),
     });
 
     if (!response.ok) {
-      throw new Error(payload.error || payload.details || "Policy versi aplikasi belum berhasil disimpan.");
+      throw new Error(payload.error || payload.details || "Info update APK belum berhasil disimpan.");
     }
 
     renderAppReleasePolicy(payload);
-    setAppReleasePolicyState("Policy versi aplikasi berhasil disimpan.", "saved");
+    setAppReleasePolicyState("Info update APK berhasil disimpan.", "saved");
   } catch (error) {
-    setAppReleasePolicyState(error.message || "Policy versi aplikasi belum berhasil disimpan.", "error");
-    showError(error.message || "Policy versi aplikasi belum berhasil disimpan.");
+    setAppReleasePolicyState(error.message || "Info update APK belum berhasil disimpan.", "error");
+    showError(error.message || "Info update APK belum berhasil disimpan.");
   } finally {
     ui.appReleaseSaveButton.disabled = false;
   }
@@ -2994,9 +2992,6 @@ ui.masterFileInput.addEventListener("change", () => {
   setMasterUploadState(file ? `Siap upload: ${file.name}` : "Belum ada file dipilih.", file ? "dirty" : "");
 });
 [
-  ui.appReleaseMinimumVersionCodeInput,
-  ui.appReleaseLatestVersionCodeInput,
-  ui.appReleaseLatestVersionNameInput,
   ui.appReleaseUpdateUrlInput,
   ui.appReleaseUpdateMessageInput,
 ].forEach((input) => {

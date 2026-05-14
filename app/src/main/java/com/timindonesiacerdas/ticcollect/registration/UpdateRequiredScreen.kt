@@ -45,17 +45,26 @@ fun UpdateRequiredScreen(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                 )
                 Text(
-                    text = "Versi APK saat ini: ${appAccess.currentVersionName} (${appAccess.currentVersionCode})",
+                    text = "Versi aktif di perangkat: ${appAccess.currentVersionName} (${appAccess.currentVersionCode})",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                 )
                 Text(
-                    text = "Versi minimal untuk akses approved: ${releasePolicy.minimumApprovedVersionCode}",
+                    text = "Versi terbaru di server: $latestVersionLabel",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                 )
                 Text(
-                    text = "Release yang diharapkan: $latestVersionLabel",
+                    text = "Version code wajib untuk user approved: ${releasePolicy.minimumApprovedVersionCode}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                )
+                Text(
+                    text = if (updateUrl != null) {
+                        "Link download APK: $updateUrl"
+                    } else {
+                        "Link download APK belum tersedia. Hubungi admin untuk file APK terbaru."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                 )
