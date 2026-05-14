@@ -114,6 +114,8 @@ Field utama policy:
 Version code, label release, dan link download sekarang bisa dibuat otomatis dari pipeline GitHub Releases.
 Yang tetap bisa diedit dari panel admin hanyalah `updateMessage`.
 
+Karena service Render di repo ini memakai `rootDir: backend`, perubahan yang hanya terjadi di folder `app/` tidak memicu redeploy backend. Untuk itu workflow release juga menulis metadata versi ke `backend/release.properties`, supaya panel admin dan endpoint download ikut memakai versi release terbaru yang benar-benar sudah ter-publish.
+
 Link yang dibagikan ke APK sekarang sebaiknya memakai endpoint backend:
 
 ```text

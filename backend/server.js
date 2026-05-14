@@ -30,6 +30,7 @@ const appReleasePolicyFile = path.join(dataDir, "app_release_policy.json");
 const androidAppBuildFile = path.resolve(rootDir, "..", "app", "build.gradle.kts");
 const androidAppVersionFile = path.resolve(rootDir, "..", "app", "version.properties");
 const androidAppReleaseMetadataFile = path.resolve(rootDir, "..", "app", "release.properties");
+const bundledReleaseMetadataFile = path.join(rootDir, "release.properties");
 const bundledSchoolMasterFile = path.join(rootDir, "data", "school_master.json");
 const schoolMasterFile = path.join(dataDir, "school_master.json");
 const configuredPublicBaseUrl = typeof process.env.TIC_PUBLIC_BASE_URL === "string"
@@ -168,23 +169,30 @@ async function writeRegistrationAreaNeeds(payload) {
 }
 
 function getAppReleasePolicyDefaults() {
-  const detectedRelease = detectAndroidReleaseVersion();
   const detectedReleaseMetadata = detectAndroidReleaseMetadata();
-  const minimumApprovedVersionCode = detectedRelease.versionCode;
-  const latestVersionCode = detectedRelease.versionCode;
+  const detectedReleaseVersion = detectAndroidReleaseVersion();
+  const detectedVersionCode = Math.max(
+    normalizeNonNegativeInteger(detectedReleaseMetadata.versionCode),
+    detectedReleaseVersion.versionCode,
+  );
+  const detectedVersionName = normalizeString(detectedReleaseMetadata.versionName)
+    || detectedReleaseVersion.versionName
+    || null;
+  const minimumApprovedVersionCode = detectedVersionCode;
+  const latestVersionCode = detectedVersionCode;
 
   return {
     minimumApprovedVersionCode,
     latestVersionCode: Math.max(latestVersionCode, minimumApprovedVersionCode),
-    latestVersionName: detectedRelease.versionName || null,
+    latestVersionName: detectedVersionName,
     updateUrl: normalizeString(process.env.TIC_APP_UPDATE_URL)
       || normalizeString(detectedReleaseMetadata.updateUrl)
       || null,
     updateMessage: normalizeString(process.env.TIC_APP_UPDATE_MESSAGE) || null,
     mode: "auto",
-    detectedVersionCode: detectedRelease.versionCode,
-    detectedVersionName: detectedRelease.versionName,
-    updatedAt: null,
+    detectedVersionCode,
+    detectedVersionName,
+    updatedAt: normalizeString(detectedReleaseMetadata.updatedAt) || null,
   };
 }
 
@@ -276,25 +284,43 @@ function readSimpleKeyValueFile(filePath) {
 }
 
 function detectAndroidReleaseMetadata() {
-  try {
-    const parsedMetadataFile = readSimpleKeyValueFile(androidAppReleaseMetadataFile);
-    return {
-      releaseAssetName: normalizeString(parsedMetadataFile.releaseAssetName) || null,
-      updateUrl: normalizeString(parsedMetadataFile.updateUrl) || null,
-      updatedAt: normalizeString(parsedMetadataFile.updatedAt) || null,
-    };
-  } catch {
-    return {
-      releaseAssetName: null,
-      updateUrl: null,
-      updatedAt: null,
-    };
+  const metadataCandidates = [bundledReleaseMetadataFile, androidAppReleaseMetadataFile];
+
+  for (const filePath of metadataCandidates) {
+    try {
+      const parsedMetadataFile = readSimpleKeyValueFile(filePath);
+      const versionCode = normalizeNonNegativeInteger(parsedMetadataFile.appVersionCode);
+      const versionName = normalizeString(parsedMetadataFile.appVersionName) || null;
+      const releaseAssetName = normalizeString(parsedMetadataFile.releaseAssetName) || null;
+      const updateUrl = normalizeString(parsedMetadataFile.updateUrl) || null;
+      const updatedAt = normalizeString(parsedMetadataFile.updatedAt) || null;
+
+      if (versionCode > 0 || versionName || releaseAssetName || updateUrl || updatedAt) {
+        return {
+          versionCode,
+          versionName,
+          releaseAssetName,
+          updateUrl,
+          updatedAt,
+        };
+      }
+    } catch {
+      // Coba kandidat berikutnya.
+    }
   }
+
+  return {
+    versionCode: 0,
+    versionName: null,
+    releaseAssetName: null,
+    updateUrl: null,
+    updatedAt: null,
+  };
 }
 
-function detectAndroidReleaseVersion() {
+function detectAndroidReleaseVersionFromPropertiesFile(filePath) {
   try {
-    const parsedVersionFile = readSimpleKeyValueFile(androidAppVersionFile);
+    const parsedVersionFile = readSimpleKeyValueFile(filePath);
     const versionCode = normalizeNonNegativeInteger(parsedVersionFile.appVersionCode);
     const versionName = normalizeString(parsedVersionFile.appVersionName) || null;
 
@@ -305,7 +331,16 @@ function detectAndroidReleaseVersion() {
       };
     }
   } catch {
-    // Fallback to legacy build.gradle parsing for older worktrees.
+    return null;
+  }
+
+  return null;
+}
+
+function detectAndroidReleaseVersion() {
+  const detectedFromVersionFile = detectAndroidReleaseVersionFromPropertiesFile(androidAppVersionFile);
+  if (detectedFromVersionFile) {
+    return detectedFromVersionFile;
   }
 
   try {
