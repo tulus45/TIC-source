@@ -268,16 +268,18 @@ function renderAppReleasePolicy(payload, errorMessage = "") {
   ui.appReleaseMinimumVersionCodeInput.readOnly = true;
   ui.appReleaseLatestVersionCodeInput.readOnly = true;
   ui.appReleaseLatestVersionNameInput.readOnly = true;
+  ui.appReleaseUpdateUrlInput.readOnly = true;
   ui.appReleaseUpdateUrlInput.value = policy.updateUrl || "";
   ui.appReleaseUpdateMessageInput.value = policy.updateMessage || "";
   const latestReleaseLabel = policy.latestVersionName || policy.latestVersionCode || "-";
   const detectedReleaseLabel = policy.detectedVersionName || policy.detectedVersionCode || "-";
-  const sourceLabel = "otomatis dari build APK terbaru";
+  const sourceLabel = "otomatis dari build APK terbaru dan GitHub Releases";
   ui.appReleasePolicyInfo.textContent = errorMessage || (
     payload
       ? `Policy aktif diperbarui ${policy.updatedAt ? formatDate(policy.updatedAt) : "-"}.
 Sumber policy: ${sourceLabel}. Terdeteksi dari APK: ${detectedReleaseLabel}.
-Versi wajib approved: ${Number(policy.minimumApprovedVersionCode) || 0}. Latest release: ${latestReleaseLabel}.`
+Versi wajib approved: ${Number(policy.minimumApprovedVersionCode) || 0}. Latest release: ${latestReleaseLabel}.
+Link download APK: ${policy.updateUrl || "-"}`
       : "Policy versi aplikasi belum tersedia."
   );
 }
@@ -309,7 +311,7 @@ async function loadMasterPanelData() {
 
 async function saveAppReleasePolicy() {
   hideError();
-  setAppReleasePolicyState("Menyimpan info update APK...", "saving");
+  setAppReleasePolicyState("Menyimpan pesan update APK...", "saving");
   ui.appReleaseSaveButton.disabled = true;
 
   try {
@@ -320,20 +322,19 @@ async function saveAppReleasePolicy() {
       },
       body: JSON.stringify({
         mode: "auto",
-        updateUrl: ui.appReleaseUpdateUrlInput.value.trim(),
         updateMessage: ui.appReleaseUpdateMessageInput.value.trim(),
       }),
     });
 
     if (!response.ok) {
-      throw new Error(payload.error || payload.details || "Info update APK belum berhasil disimpan.");
+      throw new Error(payload.error || payload.details || "Pesan update APK belum berhasil disimpan.");
     }
 
     renderAppReleasePolicy(payload);
-    setAppReleasePolicyState("Info update APK berhasil disimpan.", "saved");
+    setAppReleasePolicyState("Pesan update APK berhasil disimpan.", "saved");
   } catch (error) {
-    setAppReleasePolicyState(error.message || "Info update APK belum berhasil disimpan.", "error");
-    showError(error.message || "Info update APK belum berhasil disimpan.");
+    setAppReleasePolicyState(error.message || "Pesan update APK belum berhasil disimpan.", "error");
+    showError(error.message || "Pesan update APK belum berhasil disimpan.");
   } finally {
     ui.appReleaseSaveButton.disabled = false;
   }
@@ -2995,7 +2996,10 @@ ui.masterFileInput.addEventListener("change", () => {
   ui.appReleaseUpdateUrlInput,
   ui.appReleaseUpdateMessageInput,
 ].forEach((input) => {
-  input.addEventListener("input", () => setAppReleasePolicyState("Perubahan policy belum disimpan.", "dirty"));
+  if (input === ui.appReleaseUpdateUrlInput) {
+    return;
+  }
+  input.addEventListener("input", () => setAppReleasePolicyState("Perubahan pesan update belum disimpan.", "dirty"));
 });
 ui.detailDrawerCloseButton.addEventListener("click", closeRegistrationDrawer);
 ui.detailDrawerBackdrop.addEventListener("click", closeRegistrationDrawer);

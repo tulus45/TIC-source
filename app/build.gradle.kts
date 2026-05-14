@@ -13,6 +13,10 @@ val backendBaseUrl = providers.gradleProperty("ticBackendBaseUrl")
     .orElse("https://tic-registration-backend.onrender.com")
     .get()
 
+fun findBuildConfigValue(name: String): String? =
+    providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
+        ?: System.getenv(name)?.takeIf { it.isNotBlank() }
+
 data class AutoAppVersion(
     val versionCode: Int,
     val versionName: String,
@@ -115,10 +119,31 @@ if (!appVersionStateFile.exists() || resolvedAppVersion != storedAppVersion) {
 
 val appVersionCode = resolvedAppVersion.versionCode
 val appVersionName = resolvedAppVersion.versionName
+val releaseStoreFilePath = findBuildConfigValue("TIC_RELEASE_STORE_FILE")
+val releaseStorePassword = findBuildConfigValue("TIC_RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = findBuildConfigValue("TIC_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = findBuildConfigValue("TIC_RELEASE_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseStoreFilePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
 
 android {
     namespace = "com.timindonesiacerdas.ticcollect"
     compileSdk = 34
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(requireNotNull(releaseStoreFilePath))
+                storePassword = requireNotNull(releaseStorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "com.timindonesiacerdas.ticcollect"
@@ -144,6 +169,9 @@ android {
         release {
             isMinifyEnabled = false
             manifestPlaceholders["usesCleartextTraffic"] = "false"
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

@@ -29,6 +29,7 @@ const registrationAreaNeedsFile = path.join(dataDir, "registration_area_needs.js
 const appReleasePolicyFile = path.join(dataDir, "app_release_policy.json");
 const androidAppBuildFile = path.resolve(rootDir, "..", "app", "build.gradle.kts");
 const androidAppVersionFile = path.resolve(rootDir, "..", "app", "version.properties");
+const androidAppReleaseMetadataFile = path.resolve(rootDir, "..", "app", "release.properties");
 const bundledSchoolMasterFile = path.join(rootDir, "data", "school_master.json");
 const schoolMasterFile = path.join(dataDir, "school_master.json");
 const adminSessionCookieName = "tic_admin_session";
@@ -165,6 +166,7 @@ async function writeRegistrationAreaNeeds(payload) {
 
 function getAppReleasePolicyDefaults() {
   const detectedRelease = detectAndroidReleaseVersion();
+  const detectedReleaseMetadata = detectAndroidReleaseMetadata();
   const minimumApprovedVersionCode = detectedRelease.versionCode;
   const latestVersionCode = detectedRelease.versionCode;
 
@@ -172,7 +174,9 @@ function getAppReleasePolicyDefaults() {
     minimumApprovedVersionCode,
     latestVersionCode: Math.max(latestVersionCode, minimumApprovedVersionCode),
     latestVersionName: detectedRelease.versionName || null,
-    updateUrl: normalizeString(process.env.TIC_APP_UPDATE_URL) || null,
+    updateUrl: normalizeString(process.env.TIC_APP_UPDATE_URL)
+      || normalizeString(detectedReleaseMetadata.updateUrl)
+      || null,
     updateMessage: normalizeString(process.env.TIC_APP_UPDATE_MESSAGE) || null,
     mode: "auto",
     detectedVersionCode: detectedRelease.versionCode,
@@ -194,7 +198,7 @@ function normalizeAppReleasePolicy(payload = {}, fallback = getAppReleasePolicyD
     minimumApprovedVersionCode,
     latestVersionCode,
     latestVersionName: normalizeString(fallbackSource.latestVersionName) || null,
-    updateUrl: normalizeString(source.updateUrl ?? fallbackSource.updateUrl) || null,
+    updateUrl: normalizeString(fallbackSource.updateUrl) || null,
     updateMessage: normalizeString(source.updateMessage ?? fallbackSource.updateMessage) || null,
     mode: "auto",
     detectedVersionCode: normalizeNonNegativeInteger(
@@ -266,6 +270,23 @@ function readSimpleKeyValueFile(filePath) {
     accumulator[key] = value;
     return accumulator;
   }, {});
+}
+
+function detectAndroidReleaseMetadata() {
+  try {
+    const parsedMetadataFile = readSimpleKeyValueFile(androidAppReleaseMetadataFile);
+    return {
+      releaseAssetName: normalizeString(parsedMetadataFile.releaseAssetName) || null,
+      updateUrl: normalizeString(parsedMetadataFile.updateUrl) || null,
+      updatedAt: normalizeString(parsedMetadataFile.updatedAt) || null,
+    };
+  } catch {
+    return {
+      releaseAssetName: null,
+      updateUrl: null,
+      updatedAt: null,
+    };
+  }
 }
 
 function detectAndroidReleaseVersion() {

@@ -108,10 +108,24 @@ Field utama policy:
 - `minimumApprovedVersionCode`: versi minimum agar user approved boleh masuk Home
 - `latestVersionCode`: versi release terbaru yang sedang Anda edarkan
 - `latestVersionName`: label release, misalnya `0.2.0`
-- `updateUrl`: link download/update APK
+- `updateUrl`: link download/update APK dari GitHub Releases terbaru
 - `updateMessage`: pesan yang tampil di APK saat update diwajibkan
 
-Setelah Anda upload APK release baru, cukup buka `/admin` lalu update policy pada panel **Gate APK Approved**.
+Version code, label release, dan link download sekarang bisa dibuat otomatis dari pipeline GitHub Releases.
+Yang tetap bisa diedit dari panel admin hanyalah `updateMessage`.
+
+Link stabil yang dipakai APK adalah format:
+
+```text
+https://github.com/<owner>/<repo>/releases/latest/download/tic-latest.apk
+```
+
+Jika Anda ingin publish APK otomatis ke GitHub Releases, tambahkan GitHub Actions dan secret signing Android berikut:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
 
 Kalau Anda punya data registrasi lama yang masih menyimpan KTP/selfie di disk lokal Render, backend ini juga menyediakan endpoint migrasi:
 
