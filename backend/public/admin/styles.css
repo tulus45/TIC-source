@@ -544,6 +544,10 @@ a {
   min-width: 110px;
 }
 
+.row-action-stack .button--small {
+  width: 100%;
+}
+
 .registrations-table thead th {
   position: sticky;
   top: 0;

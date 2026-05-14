@@ -75,12 +75,14 @@ interface TicBackendApiContract {
         uid: String? = null,
         gmail: String? = null,
         registrationId: String? = null,
+        previousUid: String? = null,
     ): CurrentUserResponse
     suspend fun getSchoolMasterData(): SchoolMasterDataResponse
     suspend fun getRegistrationStatus(
         uid: String? = null,
         gmail: String? = null,
         registrationId: String? = null,
+        previousUid: String? = null,
     ): RegistrationStatusResponse
     suspend fun uploadRegistrationAsset(
         uid: String,
@@ -88,7 +90,10 @@ interface TicBackendApiContract {
         assetType: String,
         filePath: String,
     ): RegistrationAssetUploadResponse
-    suspend fun submitRegistration(draft: RegistrationDraft): RegistrationUploadResponse
+    suspend fun submitRegistration(
+        draft: RegistrationDraft,
+        previousUid: String? = null,
+    ): RegistrationUploadResponse
     suspend fun submitSubmission(record: SubmissionRecord): SubmissionUploadResponse
     suspend fun getMySubmissions(): List<SubmissionRecord>
 }

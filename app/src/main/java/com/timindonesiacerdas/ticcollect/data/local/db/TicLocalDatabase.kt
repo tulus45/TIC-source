@@ -31,6 +31,9 @@ interface RegistrationDraftDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: RegistrationDraftEntity)
 
+    @Query("DELETE FROM registration_drafts WHERE uid = :uid")
+    suspend fun deleteByUid(uid: String)
+
     @Query(
         """
         UPDATE registration_drafts

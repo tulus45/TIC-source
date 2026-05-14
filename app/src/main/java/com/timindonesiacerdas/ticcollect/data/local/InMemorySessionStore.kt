@@ -1,8 +1,8 @@
 package com.timindonesiacerdas.ticcollect.data.local
 
 import android.app.Application
-import org.json.JSONArray
-import org.json.JSONObject
+import android.content.SharedPreferences
+import android.provider.Settings
 import androidx.room.Room
 import com.timindonesiacerdas.ticcollect.BuildConfig
 import com.timindonesiacerdas.ticcollect.data.local.db.RegistrationDraftDao
@@ -38,13 +38,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
 object InMemorySessionStore {
     private const val databaseName = "tic_collect.db"
     private const val preferencesName = "tic_collect_prefs"
     private const val installationUidKey = "installation_uid"
+    private const val legacyInstallationUidKey = "legacy_installation_uid"
     private const val legacyDemoUidKey = "demo_uid"
     private const val submissionsStorageKey = "submissions_json"
+    private const val stableInstallationUidPrefix = "tic-device-"
 
     private val storeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _session = MutableStateFlow(SessionState())
@@ -99,6 +103,7 @@ object InMemorySessionStore {
             appAccess = _session.value.appAccess.takeIf { it.currentVersionCode > 0 }
                 ?: buildCurrentAppAccessState(),
         )
+        maybeMigrateLegacyLocalData(localIdentity.uid)
 
         storeScope.launch {
             sessionDao.upsert(
@@ -121,20 +126,21 @@ object InMemorySessionStore {
     private fun getOrCreateInstallationUid(): String {
         val preferences = application.getSharedPreferences(preferencesName, Application.MODE_PRIVATE)
         val existingValue = preferences.getString(installationUidKey, null)?.trim().orEmpty()
-        if (existingValue.isNotBlank()) {
+        if (existingValue.isNotBlank() && isStableInstallationUid(existingValue)) {
             return existingValue
         }
 
-        val legacyValue = preferences.getString(legacyDemoUidKey, null)?.trim().orEmpty()
-        val resolvedUid = if (legacyValue.isNotBlank()) legacyValue else "tic-installation-${UUID.randomUUID()}"
-
-        preferences.edit()
-            .putString(installationUidKey, resolvedUid)
-            .apply()
-        if (legacyValue.isBlank()) {
-            preferences.edit().remove(legacyDemoUidKey).apply()
+        val stableUid = buildStableInstallationUid()
+        val legacyValue = existingValue.ifBlank {
+            preferences.getString(legacyDemoUidKey, null)?.trim().orEmpty()
         }
-        return resolvedUid
+
+        persistResolvedInstallationUid(
+            preferences = preferences,
+            currentUid = stableUid,
+            previousUid = legacyValue.takeIf { it.isNotBlank() && it != stableUid },
+        )
+        return stableUid
     }
 
     private fun buildLocalIdentity(): AuthenticatedUser = AuthenticatedUser(
@@ -197,7 +203,10 @@ object InMemorySessionStore {
             selfieDriveFileId = selfieUpload.fileUrl,
         )
 
-        val response = TicBackendHttpClient.submitRegistration(draftWithUploadRefs)
+        val response = TicBackendHttpClient.submitRegistration(
+            draft = draftWithUploadRefs,
+            previousUid = getLegacyInstallationUid(),
+        )
         val localDraft = draft.toLocalDraft().copy(
             ktpDriveFileId = response.ktpDriveFileId ?: draftWithUploadRefs.ktpDriveFileId,
             selfieDriveFileId = response.selfieDriveFileId ?: draftWithUploadRefs.selfieDriveFileId,
@@ -212,10 +221,12 @@ object InMemorySessionStore {
     suspend fun refreshRegistrationFromBackend(): UserProfile? {
         ensureInitialized()
         val user = session.value.user ?: return null
+        val previousUid = getLegacyInstallationUid()
 
         val currentUser = TicBackendHttpClient.getCurrentUser(
             uid = user.uid,
             gmail = user.gmail,
+            previousUid = previousUid,
         )
         val remoteProfile = currentUser.profile
         val appAccess = buildCurrentAppAccessState(currentUser.appReleasePolicy)
@@ -247,6 +258,19 @@ object InMemorySessionStore {
             updatedAt = remoteProfile.updatedAt ?: TimeFormatter.nowStorage(),
         )
         registrationDraftDao.upsert(mergedDraft.toEntity())
+        sessionDao.upsert(
+            SessionEntity(
+                isAuthenticated = true,
+                uid = user.uid,
+                gmail = remoteProfile.gmail.ifBlank { user.gmail },
+                displayName = remoteProfile.displayName.ifBlank { user.displayName },
+                photoUrl = user.photoUrl,
+                firebaseIdToken = user.firebaseIdToken,
+            ),
+        )
+        if (remoteProfile.uid == user.uid && previousUid != null) {
+            clearLegacyInstallationUid()
+        }
         _session.value = _session.value.copy(appAccess = appAccess)
         return remoteProfile
     }
@@ -381,6 +405,89 @@ object InMemorySessionStore {
         currentVersionName = BuildConfig.APP_VERSION_NAME,
         releasePolicy = releasePolicy,
     )
+
+    private fun isStableInstallationUid(value: String): Boolean =
+        value.startsWith(stableInstallationUidPrefix)
+
+    private fun buildStableInstallationUid(): String {
+        val androidId = Settings.Secure.getString(
+            application.contentResolver,
+            Settings.Secure.ANDROID_ID,
+        )?.trim().orEmpty()
+        val stableSuffix = if (androidId.isNotBlank()) {
+            UUID.nameUUIDFromBytes(androidId.toByteArray(Charsets.UTF_8))
+        } else {
+            UUID.randomUUID()
+        }
+        return "$stableInstallationUidPrefix$stableSuffix"
+    }
+
+    private fun persistResolvedInstallationUid(
+        preferences: SharedPreferences,
+        currentUid: String,
+        previousUid: String?,
+    ) {
+        preferences.edit().apply {
+            putString(installationUidKey, currentUid)
+            remove(legacyDemoUidKey)
+            if (previousUid.isNullOrBlank()) {
+                remove(legacyInstallationUidKey)
+            } else {
+                putString(legacyInstallationUidKey, previousUid)
+            }
+        }.apply()
+    }
+
+    private fun getLegacyInstallationUid(): String? {
+        val preferences = application.getSharedPreferences(preferencesName, Application.MODE_PRIVATE)
+        return preferences.getString(legacyInstallationUidKey, null)?.trim().orEmpty().ifBlank { null }
+    }
+
+    private fun clearLegacyInstallationUid() {
+        val preferences = application.getSharedPreferences(preferencesName, Application.MODE_PRIVATE)
+        preferences.edit().remove(legacyInstallationUidKey).apply()
+    }
+
+    private fun maybeMigrateLegacyLocalData(currentUid: String) {
+        val previousUid = getLegacyInstallationUid() ?: return
+        if (previousUid == currentUid) {
+            clearLegacyInstallationUid()
+            return
+        }
+
+        storeScope.launch {
+            val currentDraft = registrationDraftDao.getByUid(currentUid)
+            val previousDraft = registrationDraftDao.getByUid(previousUid)
+            if (currentDraft == null && previousDraft != null) {
+                registrationDraftDao.upsert(
+                    previousDraft.copy(
+                        uid = currentUid,
+                        updatedAt = TimeFormatter.nowStorage(),
+                    ),
+                )
+            }
+            if (previousDraft != null) {
+                registrationDraftDao.deleteByUid(previousUid)
+            }
+            migrateStoredSubmissions(previousUid, currentUid)
+        }
+    }
+
+    private fun migrateStoredSubmissions(previousUid: String, currentUid: String) {
+        if (previousUid == currentUid) return
+
+        val migratedItems = _submissions.value.map { record ->
+            if (record.uid == previousUid) {
+                record.copy(uid = currentUid)
+            } else {
+                record
+            }
+        }
+        if (migratedItems == _submissions.value) return
+
+        _submissions.value = migratedItems
+        persistSubmissions(migratedItems)
+    }
 
     private fun replaceSubmission(record: SubmissionRecord) {
         upsertSubmission(record)

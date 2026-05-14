@@ -579,6 +579,7 @@ function renderRows() {
     const created = fragment.querySelector(".row-created");
     const updated = fragment.querySelector(".row-updated");
     const viewButton = fragment.querySelector(".row-view-button");
+    const deleteButton = fragment.querySelector(".row-delete-button");
 
     statusPill.textContent = formatRegistrationStatusLabel(item.status);
     statusPill.dataset.status = normalizeRegistrationStatus(item.status);
@@ -591,6 +592,15 @@ function renderRows() {
     updated.textContent = `Update ${formatDate(item.updatedAt)}`;
 
     viewButton.addEventListener("click", () => openRegistrationDrawer(item));
+    deleteButton.addEventListener("click", async () => {
+      viewButton.disabled = true;
+      deleteButton.disabled = true;
+      const deleted = await deleteRegistrationRecord(item);
+      if (!deleted) {
+        viewButton.disabled = false;
+        deleteButton.disabled = false;
+      }
+    });
     ui.tableBody.appendChild(fragment);
   });
 
@@ -1237,6 +1247,56 @@ async function deleteSubmissionRecord(item) {
   }
 }
 
+async function deleteRegistrationRecord(item) {
+  const registrationId = item?.registrationId;
+  if (!registrationId) {
+    return false;
+  }
+
+  const confirmed = window.confirm(
+    `Hapus registrasi ${registrationId}?\n\nData registrasi serta file KTP/selfie terkait akan dihapus permanen.`,
+  );
+  if (!confirmed) {
+    return false;
+  }
+
+  hideError();
+  const isSelectedDrawerItem = selectedDrawerType === "registration" && selectedDrawerRecordId === registrationId;
+  if (isSelectedDrawerItem) {
+    setDrawerActionLoading(true);
+  }
+
+  try {
+    const { response, payload } = await fetchJson(`/api/admin/registrations/${encodeURIComponent(registrationId)}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      throw new Error(payload.error || payload.details || "Gagal menghapus registrasi.");
+    }
+
+    removeRegistrationRecord(registrationId);
+    renderRows();
+    renderSummary(summaryItems);
+    refreshToolbarSummary();
+    updateDashboardMetrics();
+    touchLastSync();
+
+    if (isSelectedDrawerItem) {
+      closeRegistrationDrawer();
+    }
+
+    return true;
+  } catch (error) {
+    showError(error.message || "Gagal menghapus registrasi.");
+    return false;
+  } finally {
+    if (isSelectedDrawerItem) {
+      setDrawerActionLoading(false);
+    }
+  }
+}
+
 function setLoading(isLoading) {
   updateExportButtonState(isLoading);
 }
@@ -1470,7 +1530,7 @@ function refreshSelectedRegistration(successMessage = "") {
 
 function fillRegistrationDrawer(item, successMessage = "") {
   setDrawerModeCopy("registration");
-  ui.drawerDeleteButton.classList.add("hidden");
+  ui.drawerDeleteButton.classList.remove("hidden");
   ui.drawerStatusPill.textContent = formatRegistrationStatusLabel(item.status);
   ui.drawerStatusPill.dataset.status = normalizeRegistrationStatus(item.status);
   ui.drawerTitle.textContent = item.nama || item.displayName || "Tanpa nama";
@@ -1742,7 +1802,7 @@ function setDrawerActionAvailability(item) {
   ui.drawerApproveButton.disabled = !hasSelection || status === REGISTRATION_APPROVED_STATUS || status === "APPROVED";
   ui.drawerRejectButton.disabled = !hasSelection || status === "REJECTED";
   ui.drawerSuspendButton.disabled = !hasSelection || status === "SUSPENDED";
-  ui.drawerDeleteButton.disabled = !hasSelection || selectedDrawerType !== "submission";
+  ui.drawerDeleteButton.disabled = !hasSelection;
 }
 
 function setDrawerActionLoading(isLoading) {
@@ -1823,6 +1883,11 @@ function mergeSubmissionRecord(partial) {
   uploadItems = uploadItems.map((item) => (
     item.submissionId === partial.submissionId ? { ...item, ...partial } : item
   ));
+}
+
+function removeRegistrationRecord(registrationId) {
+  currentItems = currentItems.filter((item) => item.registrationId !== registrationId);
+  summaryItems = summaryItems.filter((item) => item.registrationId !== registrationId);
 }
 
 function removeSubmissionRecord(submissionId) {
@@ -2952,11 +3017,16 @@ ui.drawerRejectButton.addEventListener("click", () => updateSelectedRegistration
 ui.drawerSuspendButton.addEventListener("click", () => updateSelectedRegistrationStatus("suspend"));
 ui.drawerDeleteButton.addEventListener("click", async () => {
   const item = findSelectedDrawerItem();
-  if (!item || selectedDrawerType !== "submission") {
+  if (!item) {
     return;
   }
 
-  await deleteSubmissionRecord(item);
+  if (selectedDrawerType === "submission") {
+    await deleteSubmissionRecord(item);
+    return;
+  }
+
+  await deleteRegistrationRecord(item);
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !ui.detailDrawer.classList.contains("hidden")) {

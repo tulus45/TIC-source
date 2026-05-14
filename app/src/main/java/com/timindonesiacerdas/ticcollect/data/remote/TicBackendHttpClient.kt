@@ -50,11 +50,12 @@ object TicBackendHttpClient : TicBackendApiContract {
         uid: String?,
         gmail: String?,
         registrationId: String?,
+        previousUid: String?,
     ): CurrentUserResponse {
         val payload = requestJson(
             method = "GET",
             path = TicApiRoutes.currentUser,
-            query = buildQuery(uid, gmail, registrationId),
+            query = buildQuery(uid, gmail, registrationId, previousUid),
         )
 
         return CurrentUserResponse(
@@ -104,11 +105,12 @@ object TicBackendHttpClient : TicBackendApiContract {
         uid: String?,
         gmail: String?,
         registrationId: String?,
+        previousUid: String?,
     ): RegistrationStatusResponse {
         val payload = requestJson(
             method = "GET",
             path = TicApiRoutes.registrationStatus,
-            query = buildQuery(uid, gmail, registrationId),
+            query = buildQuery(uid, gmail, registrationId, previousUid),
         )
 
         return RegistrationStatusResponse(
@@ -154,12 +156,16 @@ object TicBackendHttpClient : TicBackendApiContract {
         )
     }
 
-    override suspend fun submitRegistration(draft: RegistrationDraft): RegistrationUploadResponse {
+    override suspend fun submitRegistration(
+        draft: RegistrationDraft,
+        previousUid: String?,
+    ): RegistrationUploadResponse {
         val payload = requestJson(
             method = "POST",
             path = TicApiRoutes.registrations,
             body = JSONObject().apply {
                 put("uid", draft.uid)
+                previousUid?.trim()?.takeIf { it.isNotBlank() }?.let { put("previousUid", it) }
                 put("gmail", draft.gmail)
                 put("displayName", draft.displayName)
                 put("nik", draft.nik)
@@ -259,7 +265,7 @@ object TicBackendHttpClient : TicBackendApiContract {
         val payload = requestJsonArray(
             method = "GET",
             path = TicApiRoutes.mySubmissions,
-            query = buildQuery(currentUser.uid, currentUser.gmail, null),
+            query = buildQuery(currentUser.uid, currentUser.gmail, null, null),
         )
 
         return buildList(payload.length()) {
@@ -488,10 +494,12 @@ object TicBackendHttpClient : TicBackendApiContract {
         uid: String?,
         gmail: String?,
         registrationId: String?,
+        previousUid: String?,
     ): Map<String, String> = buildMap {
         uid?.trim()?.takeIf { it.isNotBlank() }?.let { put("uid", it) }
         gmail?.trim()?.takeIf { it.isNotBlank() }?.let { put("gmail", it) }
         registrationId?.trim()?.takeIf { it.isNotBlank() }?.let { put("registrationId", it) }
+        previousUid?.trim()?.takeIf { it.isNotBlank() }?.let { put("previousUid", it) }
     }
 
     private fun urlEncode(value: String): String = URLEncoder.encode(value, Charsets.UTF_8.name())

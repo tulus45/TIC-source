@@ -1694,11 +1694,116 @@ async function auditRegistrationsGoogleDrive({ detailLimit = 50 } = {}) {
   };
 }
 
-function buildRegistrationRecord(body) {
-  const now = new Date().toISOString();
+function resolveRegistrationLookup(searchSource) {
+  const source = searchSource && typeof searchSource === "object" ? searchSource : {};
+  const readValue = (key) =>
+    typeof source.get === "function"
+      ? source.get(key)
+      : source[key];
 
   return {
-    registrationId: `reg-${Date.now()}-${randomUUID().slice(0, 8)}`,
+    registrationId: normalizeString(readValue("registrationId")),
+    uid: normalizeString(readValue("uid")),
+    previousUid: normalizeString(readValue("previousUid")),
+    gmail: normalizeString(readValue("gmail")).toLowerCase(),
+    nik: normalizeString(readValue("nik")),
+  };
+}
+
+function findRegistrationMatch(items, searchSource) {
+  const lookup = resolveRegistrationLookup(searchSource);
+  const matchers = [
+    {
+      matchedBy: "registrationId",
+      predicate: (item) => lookup.registrationId && item.registrationId === lookup.registrationId,
+    },
+    {
+      matchedBy: "uid",
+      predicate: (item) => lookup.uid && normalizeString(item.uid) === lookup.uid,
+    },
+    {
+      matchedBy: "previousUid",
+      predicate: (item) => lookup.previousUid && normalizeString(item.uid) === lookup.previousUid,
+    },
+    {
+      matchedBy: "gmail",
+      predicate: (item) => lookup.gmail && normalizeString(item.gmail).toLowerCase() === lookup.gmail,
+    },
+    {
+      matchedBy: "nik",
+      predicate: (item) => lookup.nik && normalizeString(item.nik) === lookup.nik,
+    },
+  ];
+
+  for (const matcher of matchers) {
+    const index = items.findIndex(matcher.predicate);
+    if (index >= 0) {
+      return {
+        index,
+        record: items[index],
+        matchedBy: matcher.matchedBy,
+      };
+    }
+  }
+
+  return {
+    index: -1,
+    record: null,
+    matchedBy: "",
+  };
+}
+
+function resolveRegistrationStatusForSave(existingRecord, matchedBy) {
+  if (!existingRecord) {
+    return "PENDING";
+  }
+
+  const existingStatus = normalizeRegistrationStatus(existingRecord.status);
+  if (matchedBy === "uid") {
+    return "PENDING";
+  }
+  if (existingStatus === "APPROVEDV2") {
+    return "APPROVEDV2";
+  }
+  if (existingStatus === "SUSPENDED") {
+    return "SUSPENDED";
+  }
+
+  return "PENDING";
+}
+
+async function maybeRebindRegistrationUid(items, match, nextUid) {
+  const resolvedUid = normalizeString(nextUid);
+  if (!match?.record || !resolvedUid) {
+    return match?.record || null;
+  }
+  if (!["previousUid", "gmail", "nik"].includes(match.matchedBy)) {
+    return match.record;
+  }
+  if (normalizeString(match.record.uid) === resolvedUid) {
+    return match.record;
+  }
+
+  const updatedRecord = normalizeRegistrationRecord({
+    ...match.record,
+    uid: resolvedUid,
+    updatedAt: new Date().toISOString(),
+  });
+  items[match.index] = updatedRecord;
+  await writeRegistrations(items);
+  return updatedRecord;
+}
+
+function buildRegistrationRecord(body, existingRecord = null, matchedBy = "") {
+  const now = new Date().toISOString();
+  const resolvedStatus = resolveRegistrationStatusForSave(existingRecord, matchedBy);
+  const shouldPreserveReviewContext = Boolean(existingRecord)
+    && matchedBy
+    && matchedBy !== "uid"
+    && resolvedStatus !== "PENDING";
+
+  return {
+    registrationId: normalizeString(existingRecord?.registrationId) || `reg-${Date.now()}-${randomUUID().slice(0, 8)}`,
     uid: normalizeString(body.uid),
     gmail: normalizeString(body.gmail),
     displayName: normalizeString(body.displayName),
@@ -1718,12 +1823,12 @@ function buildRegistrationRecord(body) {
     selfieLocalPath: normalizeString(body.selfieLocalPath),
     ktpDriveFileId: normalizeAssetUrl(body.ktpDriveFileId),
     selfieDriveFileId: normalizeAssetUrl(body.selfieDriveFileId),
-    status: "PENDING",
-    adminNote: null,
-    rejectionReason: null,
-    createdAt: normalizeString(body.createdAt) || now,
+    status: resolvedStatus,
+    adminNote: shouldPreserveReviewContext ? normalizeString(existingRecord?.adminNote) || null : null,
+    rejectionReason: shouldPreserveReviewContext ? normalizeString(existingRecord?.rejectionReason) || null : null,
+    createdAt: normalizeString(existingRecord?.createdAt) || normalizeString(body.createdAt) || now,
     updatedAt: now,
-    source: "android",
+    source: normalizeString(existingRecord?.source) || "android",
   };
 }
 
@@ -1919,6 +2024,51 @@ async function deleteSubmissionStoredFiles(record) {
   }
 }
 
+async function deleteRegistrationStoredFiles(record) {
+  const assetReferences = [
+    record?.ktpDriveFileId,
+    record?.selfieDriveFileId,
+    record?.ktpLocalPath,
+    record?.selfieLocalPath,
+  ];
+
+  const driveFileIds = Array.from(new Set(
+    assetReferences
+      .map((value) => extractGoogleDriveFileIdFromProxyUrl(value))
+      .filter(Boolean),
+  ));
+  for (const fileId of driveFileIds) {
+    await deleteGoogleDriveFile(fileId);
+  }
+
+  const localFilePaths = Array.from(new Set(
+    assetReferences
+      .map((value) => resolveUploadsProxyUrlToLocalPath(value))
+      .filter(Boolean),
+  ));
+  for (const filePath of localFilePaths) {
+    await fs.rm(filePath, { force: true });
+  }
+
+  const safeUid = sanitizePathSegment(record?.uid, "unknown_uid");
+  const registrationsBaseDir = path.resolve(path.join(uploadsDir, "registrations"));
+  const targetDir = path.resolve(path.join(registrationsBaseDir, safeUid));
+  const allowedPrefix = `${registrationsBaseDir}${path.sep}`;
+
+  if (targetDir.startsWith(allowedPrefix)) {
+    try {
+      const remainingEntries = await fs.readdir(targetDir);
+      if (!remainingEntries.length) {
+        await fs.rm(targetDir, { recursive: true, force: true });
+      }
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        throw error;
+      }
+    }
+  }
+}
+
 async function storeSubmissionFiles(uid, submissionId, files, googleDriveParentFolderId = "") {
   if (!Array.isArray(files) || !files.length) {
     return [];
@@ -2024,16 +2174,7 @@ async function storeRegistrationAsset(body) {
 }
 
 function findRegistration(items, searchParams) {
-  const registrationId = normalizeString(searchParams.get("registrationId"));
-  const uid = normalizeString(searchParams.get("uid"));
-  const gmail = normalizeString(searchParams.get("gmail")).toLowerCase();
-
-  return items.find((item) => {
-    if (registrationId && item.registrationId === registrationId) return true;
-    if (uid && item.uid === uid) return true;
-    if (gmail && item.gmail.toLowerCase() === gmail) return true;
-    return false;
-  });
+  return findRegistrationMatch(items, searchParams).record;
 }
 
 async function buildSubmissionRecord(body) {
@@ -2205,13 +2346,11 @@ async function handleApi(req, res, url) {
     }
 
     const items = await readRegistrations();
-    const existingIndex = items.findIndex((item) => item.uid === normalizeString(body.uid));
-    const record = buildRegistrationRecord(body);
+    const match = findRegistrationMatch(items, body);
+    const record = buildRegistrationRecord(body, match.record, match.matchedBy);
 
-    if (existingIndex >= 0) {
-      record.registrationId = items[existingIndex].registrationId;
-      record.createdAt = items[existingIndex].createdAt;
-      items[existingIndex] = record;
+    if (match.index >= 0) {
+      items[match.index] = record;
     } else {
       items.unshift(record);
     }
@@ -2229,7 +2368,10 @@ async function handleApi(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/registrations/status") {
     const items = await readRegistrations();
-    const record = findRegistration(items, url.searchParams);
+    const match = findRegistrationMatch(items, url.searchParams);
+    const record = match.record
+      ? await maybeRebindRegistrationUid(items, match, url.searchParams.get("uid"))
+      : null;
 
     if (!record) {
       sendJson(res, 404, { error: "Registrasi tidak ditemukan." });
@@ -2250,7 +2392,10 @@ async function handleApi(req, res, url) {
       readRegistrations(),
       readAppReleasePolicy(),
     ]);
-    const record = findRegistration(items, url.searchParams);
+    const match = findRegistrationMatch(items, url.searchParams);
+    const record = match.record
+      ? await maybeRebindRegistrationUid(items, match, url.searchParams.get("uid"))
+      : null;
 
     if (!record) {
       sendJson(res, 404, { error: "User profile tidak ditemukan." });
@@ -2493,6 +2638,38 @@ async function handleApi(req, res, url) {
     await writeSubmissions(items);
     sendJson(res, 200, {
       submissionId,
+      deleted: true,
+      deletedAt: new Date().toISOString(),
+    });
+    return;
+  }
+
+  const registrationDeleteMatch = url.pathname.match(/^\/api\/admin\/registrations\/([^/]+)$/);
+  if (req.method === "DELETE" && registrationDeleteMatch) {
+    const [, registrationId] = registrationDeleteMatch;
+    const items = await readRegistrations();
+    const targetIndex = items.findIndex((item) => item.registrationId === registrationId);
+
+    if (targetIndex < 0) {
+      sendJson(res, 404, { error: "Registrasi tidak ditemukan." });
+      return;
+    }
+
+    const [target] = items.splice(targetIndex, 1);
+
+    try {
+      await deleteRegistrationStoredFiles(target);
+    } catch (error) {
+      sendJson(res, 500, {
+        error: "Registrasi ditemukan, tetapi file terkait belum bisa dihapus.",
+        details: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+
+    await writeRegistrations(items);
+    sendJson(res, 200, {
+      registrationId,
       deleted: true,
       deletedAt: new Date().toISOString(),
     });
