@@ -35,6 +35,7 @@ Mode penyimpanan asset foto juga bisa dipindah ke Google Drive:
   `GOOGLE_DRIVE_REGISTRATIONS_FOLDER_ID`
   dan
   `GOOGLE_DRIVE_SUBMISSIONS_FOLDER_ID`
+- `GOOGLE_DRIVE_APK_FILE_ID` untuk file APK terbaru di Google Drive yang sama
 
 Kalau variabel itu tidak diisi, backend tetap memakai folder lokal seperti sekarang.
 
@@ -108,10 +109,10 @@ Field utama policy:
 - `minimumApprovedVersionCode`: versi minimum agar user approved boleh masuk Home
 - `latestVersionCode`: versi release terbaru yang sedang Anda edarkan
 - `latestVersionName`: label release, misalnya `0.2.0`
-- `updateUrl`: link download/update APK dari GitHub Releases terbaru
+- `updateUrl`: link download/update APK terbaru dari backend
 - `updateMessage`: pesan yang tampil di APK saat update diwajibkan
 
-Version code, label release, dan link download sekarang bisa dibuat otomatis dari pipeline GitHub Releases.
+Version code, label release, dan link download sekarang bisa dibuat otomatis dari pipeline release, atau memakai file APK tetap di Google Drive.
 Yang tetap bisa diedit dari panel admin hanyalah `updateMessage`.
 
 Karena service Render di repo ini memakai `rootDir: backend`, perubahan yang hanya terjadi di folder `app/` tidak memicu redeploy backend. Untuk itu workflow release juga menulis metadata versi ke `backend/release.properties`, supaya panel admin dan endpoint download ikut memakai versi release terbaru yang benar-benar sudah ter-publish.
@@ -122,11 +123,25 @@ Link yang dibagikan ke APK sekarang sebaiknya memakai endpoint backend:
 https://<domain-backend-anda>/downloads/latest.apk
 ```
 
-Endpoint itu akan me-redirect ke GitHub Releases terbaru. Target GitHub stabil di belakangnya tetap format:
+Endpoint itu akan me-redirect ke URL publik yang aktif, atau mengalirkan file dari Google Drive jika APK terbaru diambil dari Drive. Kalau Anda tetap memakai GitHub Releases, target stabil di belakangnya bisa tetap format:
 
 ```text
 https://github.com/<owner>/<repo>/releases/latest/download/tic-latest.apk
 ```
+
+Kalau Anda ingin lebih praktis tanpa GitHub Releases, backend ini juga bisa mengambil APK langsung dari Google Drive yang sama dengan upload registrasi. Cukup isi:
+
+```env
+GOOGLE_DRIVE_APK_FILE_ID=FILE_ID_APK_TERBARU
+```
+
+`GOOGLE_DRIVE_APK_FILE_ID` boleh diisi file ID mentah atau link file Google Drive. Backend akan memakai service account Google Drive yang sama untuk membaca file APK itu, jadi file tidak perlu dibuka publik. Endpoint `/downloads/latest.apk` akan mengalirkan file APK langsung dari Google Drive ke user.
+
+Saran alur rilis kalau memakai Google Drive:
+
+- upload `tic-latest.apk` ke Shared Drive yang sama
+- untuk rilis berikutnya, pakai `Manage versions` atau ganti file yang sama agar file ID tetap
+- biarkan app tetap memakai link backend `/downloads/latest.apk`
 
 Kalau backend Anda diakses lewat domain publik/proxy tertentu, isi environment variable berikut agar URL yang dikirim ke APK selalu benar:
 
@@ -138,6 +153,8 @@ Jika Anda ingin publish APK otomatis ke GitHub Releases, tambahkan GitHub Action
 - `ANDROID_KEYSTORE_PASSWORD`
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
+
+Kalau secret itu belum diisi, workflow GitHub release sekarang akan otomatis `skip` dan tidak lagi menandai push sebagai gagal. Ini aman bila Anda memilih distribusi APK lewat Google Drive.
 
 Kalau Anda punya data registrasi lama yang masih menyimpan KTP/selfie di disk lokal Render, backend ini juga menyediakan endpoint migrasi:
 

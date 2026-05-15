@@ -186,6 +186,7 @@ function getAppReleasePolicyDefaults() {
     latestVersionCode: Math.max(latestVersionCode, minimumApprovedVersionCode),
     latestVersionName: detectedVersionName,
     updateUrl: normalizeString(process.env.TIC_APP_UPDATE_URL)
+      || getGoogleDriveApkSourceUrlFromEnv()
       || normalizeString(detectedReleaseMetadata.updateUrl)
       || null,
     updateMessage: normalizeString(process.env.TIC_APP_UPDATE_MESSAGE) || null,
@@ -593,7 +594,59 @@ function resolveLatestApkDownloadTarget(policy) {
     return "";
   }
 
+  if (targetUrl.toLowerCase().startsWith("gdrive:")) {
+    return "";
+  }
+
   return targetUrl;
+}
+
+function resolveLatestApkGoogleDriveFileId(policy) {
+  const normalizedUpdateUrl = normalizeString(policy?.updateUrl);
+  if (!normalizedUpdateUrl.toLowerCase().startsWith("gdrive:")) {
+    return "";
+  }
+
+  return normalizeGoogleDriveFileId(normalizedUpdateUrl);
+}
+
+function normalizeDownloadFileName(value, fallback = "tic-latest.apk") {
+  const normalized = normalizeString(value)
+    .replace(/[\\/:*?"<>|\r\n]+/g, "_")
+    .replace(/\s+/g, " ");
+  return normalized || fallback;
+}
+
+function buildAttachmentContentDisposition(fileName) {
+  return `attachment; filename="${normalizeDownloadFileName(fileName).replace(/"/g, "_")}"`;
+}
+
+function resolveApkDownloadContentType(fileName, contentType) {
+  if (/\.apk$/i.test(normalizeString(fileName))) {
+    return "application/vnd.android.package-archive";
+  }
+
+  return normalizeString(contentType) || "application/octet-stream";
+}
+
+async function sendGoogleDriveApkDownload(res, fileId) {
+  const [metadata, file] = await Promise.all([
+    fetchGoogleDriveMetadata(fileId, "id,name,mimeType,size,driveId,trashed"),
+    fetchGoogleDriveFile(fileId),
+  ]);
+
+  if (metadata?.trashed) {
+    throw new Error("File APK Google Drive sudah berada di trash.");
+  }
+
+  const fileName = normalizeDownloadFileName(metadata?.name, "tic-latest.apk");
+  res.writeHead(200, {
+    "Content-Type": resolveApkDownloadContentType(fileName, file.contentType || metadata?.mimeType),
+    "Content-Length": file.contentLength || String(file.buffer.length),
+    "Content-Disposition": buildAttachmentContentDisposition(fileName),
+    "Cache-Control": "no-store",
+  });
+  res.end(file.buffer);
 }
 
 async function sendStatic(res, relativePath) {
@@ -642,6 +695,64 @@ async function readJsonBody(req) {
 
 function normalizeString(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeGoogleDriveFileId(value) {
+  const normalized = normalizeString(value);
+  if (!normalized) {
+    return "";
+  }
+
+  const withoutScheme = normalized.toLowerCase().startsWith("gdrive:")
+    ? normalized.slice("gdrive:".length).trim()
+    : normalized;
+  if (!withoutScheme) {
+    return "";
+  }
+
+  const proxiedFileId = extractGoogleDriveFileIdFromProxyUrl(withoutScheme);
+  if (proxiedFileId) {
+    return proxiedFileId;
+  }
+
+  if (/^[A-Za-z0-9_-]{10,}$/.test(withoutScheme)) {
+    return withoutScheme;
+  }
+
+  try {
+    const parsed = new URL(withoutScheme);
+    const idFromQuery = normalizeString(parsed.searchParams.get("id"));
+    if (/^[A-Za-z0-9_-]{10,}$/.test(idFromQuery)) {
+      return idFromQuery;
+    }
+
+    const filePathMatch = parsed.pathname.match(/\/file\/d\/([^/]+)/i);
+    if (filePathMatch?.[1]) {
+      const decodedId = decodeURIComponent(filePathMatch[1]);
+      if (/^[A-Za-z0-9_-]{10,}$/.test(decodedId)) {
+        return decodedId;
+      }
+    }
+  } catch {
+    return "";
+  }
+
+  return "";
+}
+
+function buildGoogleDriveApkSourceValue(fileId) {
+  const normalizedFileId = normalizeGoogleDriveFileId(fileId);
+  return normalizedFileId ? `gdrive:${normalizedFileId}` : "";
+}
+
+function getGoogleDriveApkFileIdFromEnv() {
+  return normalizeGoogleDriveFileId(
+    process.env.GOOGLE_DRIVE_APK_FILE_ID || process.env.GOOGLE_DRIVE_APK_URL,
+  );
+}
+
+function getGoogleDriveApkSourceUrlFromEnv() {
+  return buildGoogleDriveApkSourceValue(getGoogleDriveApkFileIdFromEnv());
 }
 
 function normalizeMultilineSecret(value) {
@@ -720,6 +831,10 @@ function isGoogleDriveStorageEnabled() {
 }
 
 function getGoogleDriveFolderId(kind) {
+  if (!isGoogleDriveStorageEnabled()) {
+    throw new Error("Google Drive storage belum diaktifkan.");
+  }
+
   const folderId = kind === "registration"
     ? googleDriveConfig.registrationsFolderId
     : googleDriveConfig.submissionsFolderId;
@@ -736,16 +851,12 @@ function getGoogleDriveFolderId(kind) {
 }
 
 function ensureGoogleDriveConfig() {
-  if (!isGoogleDriveStorageEnabled()) {
-    throw new Error("Google Drive storage belum diaktifkan.");
-  }
-
   if (!googleDriveConfig.clientEmail) {
-    throw new Error("GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL wajib diisi saat TIC_ASSET_STORAGE_MODE=google-drive.");
+    throw new Error("GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL wajib diisi untuk mengakses Google Drive.");
   }
 
   if (!googleDriveConfig.privateKey) {
-    throw new Error("GOOGLE_DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY wajib diisi saat TIC_ASSET_STORAGE_MODE=google-drive.");
+    throw new Error("GOOGLE_DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY wajib diisi untuk mengakses Google Drive.");
   }
 }
 
@@ -1179,6 +1290,32 @@ async function runGoogleDriveFolderCheck(kind) {
     testUploadFileId: uploadResult.id,
     cleanupError: cleanupError || null,
     warning: cleanupError ? "File test berhasil dibuat, tetapi gagal dihapus kembali." : null,
+  };
+}
+
+async function runGoogleDriveApkCheck() {
+  const fileId = getGoogleDriveApkFileIdFromEnv();
+  if (!fileId) {
+    return {
+      kind: "apk",
+      ok: false,
+      configured: false,
+      error: "GOOGLE_DRIVE_APK_FILE_ID belum diisi.",
+    };
+  }
+
+  const metadata = await fetchGoogleDriveMetadata(fileId, "id,name,mimeType,size,driveId,parents,trashed");
+  return {
+    kind: "apk",
+    ok: !metadata?.trashed,
+    configured: true,
+    fileId,
+    fileName: normalizeString(metadata.name) || "tic-latest.apk",
+    mimeType: normalizeString(metadata.mimeType) || "application/octet-stream",
+    size: normalizeString(metadata.size) || null,
+    driveId: normalizeString(metadata.driveId) || null,
+    trashed: Boolean(metadata?.trashed),
+    warning: metadata?.trashed ? "File APK ada di trash Google Drive." : null,
   };
 }
 
@@ -2668,6 +2805,7 @@ async function handleApi(req, res, url) {
       checkedAt,
       registration: null,
       submission: null,
+      apk: null,
     };
 
     try {
@@ -2692,7 +2830,23 @@ async function handleApi(req, res, url) {
       };
     }
 
-    result.ok = Boolean(result.registration?.ok && result.submission?.ok);
+    try {
+      result.apk = await runGoogleDriveApkCheck();
+    } catch (error) {
+      result.apk = {
+        kind: "apk",
+        ok: false,
+        configured: Boolean(getGoogleDriveApkFileIdFromEnv()),
+        fileId: getGoogleDriveApkFileIdFromEnv() || null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    result.ok = Boolean(
+      result.registration?.ok
+      && result.submission?.ok
+      && (result.apk?.configured === false || result.apk?.ok),
+    );
     sendJson(res, result.ok ? 200 : 500, result);
     return;
   }
@@ -3100,6 +3254,22 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/downloads/latest.apk") {
       const policy = await readAppReleasePolicy();
+      const googleDriveFileId = resolveLatestApkGoogleDriveFileId(policy);
+      if (googleDriveFileId) {
+        try {
+          await sendGoogleDriveApkDownload(res, googleDriveFileId);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "File APK Google Drive belum tersedia.";
+          const statusCode = /tidak valid/i.test(message)
+            ? 400
+            : /tidak ditemukan|trash/i.test(message)
+              ? 404
+              : 500;
+          sendText(res, statusCode, message);
+        }
+        return;
+      }
+
       const redirectTarget = resolveLatestApkDownloadTarget(policy);
 
       if (!redirectTarget) {

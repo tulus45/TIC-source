@@ -41,31 +41,38 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Validate Android signing secrets
+      - name: Check Android signing secrets
+        id: release_ready
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          missing=0
+          missing_keys=""
           for key in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
             if [ -z "${!key}" ]; then
-              echo "::error::Secret $key belum diisi. Workflow release APK dihentikan."
-              missing=1
+              missing_keys="$missing_keys $key"
             fi
           done
-          if [ "$missing" -ne 0 ]; then
-            exit 1
+
+          if [ -n "$missing_keys" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Publish APK ke GitHub Releases dilewati karena secret Android belum lengkap:$missing_keys"
+            exit 0
           fi
 
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
       - name: Prepare signing keystore
+        if: steps.release_ready.outputs.ready == 'true'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
 
       - name: Build signed release APK
+        if: steps.release_ready.outputs.ready == 'true'
         env:
           TIC_RELEASE_STORE_FILE: ${{ runner.temp }}/release.keystore
           TIC_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -76,6 +83,7 @@ jobs:
           ./gradlew assembleRelease
 
       - name: Read release version metadata
+        if: steps.release_ready.outputs.ready == 'true'
         id: release_meta
         run: |
           version_code=$(grep '^appVersionCode=' "$VERSION_METADATA_FILE" | cut -d= -f2-)
@@ -87,10 +95,12 @@ jobs:
           echo "download_url=https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/${RELEASE_ASSET_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Prepare latest APK asset
+        if: steps.release_ready.outputs.ready == 'true'
         run: |
           cp "app/build/outputs/apk/release/app-release.apk" "$RELEASE_ASSET_NAME"
 
       - name: Publish GitHub release
+        if: steps.release_ready.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -113,6 +123,7 @@ jobs:
           fi
 
       - name: Refresh committed release metadata
+        if: steps.release_ready.outputs.ready == 'true'
         run: |
           updated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           download_url="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/${RELEASE_ASSET_NAME}"
@@ -136,6 +147,7 @@ jobs:
           EOF
 
       - name: Commit bumped APK metadata
+        if: steps.release_ready.outputs.ready == 'true'
         run: |
           if git diff --quiet -- "$VERSION_METADATA_FILE" "$RELEASE_METADATA_FILE" "$BACKEND_RELEASE_METADATA_FILE"; then
             echo "Tidak ada metadata APK yang berubah."

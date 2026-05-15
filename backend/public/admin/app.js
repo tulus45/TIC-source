@@ -273,7 +273,7 @@ function renderAppReleasePolicy(payload, errorMessage = "") {
   ui.appReleaseUpdateMessageInput.value = policy.updateMessage || "";
   const latestReleaseLabel = policy.latestVersionName || policy.latestVersionCode || "-";
   const detectedReleaseLabel = policy.detectedVersionName || policy.detectedVersionCode || "-";
-  const sourceLabel = "otomatis dari build APK terbaru dan GitHub Releases";
+  const sourceLabel = "otomatis dari build APK terbaru dan sumber download aktif di backend";
   ui.appReleasePolicyInfo.textContent = errorMessage || (
     payload
       ? `Policy aktif diperbarui ${policy.updatedAt ? formatDate(policy.updatedAt) : "-"}.
