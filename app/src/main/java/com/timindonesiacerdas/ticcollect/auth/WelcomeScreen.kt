@@ -26,12 +26,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.timindonesiacerdas.ticcollect.ui.components.TicAppLogo
 import com.timindonesiacerdas.ticcollect.ui.components.TicPrimaryButton
+import com.timindonesiacerdas.ticcollect.ui.components.TicSecondaryButton
 import com.timindonesiacerdas.ticcollect.ui.components.TicSectionCard
 import com.timindonesiacerdas.ticcollect.utils.TicConstants
 
 @Composable
 fun WelcomeScreen(
     onRegistrationClick: () -> Unit,
+    onLoginClick: () -> Unit,
 ) {
     var hasAgreed by rememberSaveable { mutableStateOf(false) }
 
@@ -96,13 +98,23 @@ fun WelcomeScreen(
             }
 
             TicPrimaryButton(
-                text = "Registrasi",
+                text = "Register",
                 onClick = onRegistrationClick,
                 enabled = hasAgreed,
             )
+            TicSecondaryButton(
+                text = "Login",
+                onClick = onLoginClick,
+                enabled = hasAgreed,
+            )
+            Text(
+                text = "Pilih Register untuk akun baru. Jika sudah pernah terdaftar di device lain, pilih Login agar data registrasi lama ditarik kembali ke device ini.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
             if (!hasAgreed) {
                 Text(
-                    text = "Centang persetujuan terlebih dahulu untuk melanjutkan registrasi.",
+                    text = "Centang persetujuan terlebih dahulu untuk melanjutkan ke Register atau Login.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                 )

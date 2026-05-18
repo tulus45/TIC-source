@@ -218,14 +218,49 @@ object InMemorySessionStore {
         return response
     }
 
+    suspend fun restoreRegistrationByEmail(email: String): UserProfile {
+        ensureInitialized()
+        ensureLocalIdentity()
+
+        val normalizedEmail = email.trim()
+        require(normalizedEmail.isNotBlank()) {
+            "Email wajib diisi."
+        }
+
+        val activeUser = session.value.user ?: buildLocalIdentity()
+        sessionDao.upsert(
+            SessionEntity(
+                isAuthenticated = true,
+                uid = activeUser.uid,
+                gmail = normalizedEmail,
+                displayName = activeUser.displayName,
+                photoUrl = activeUser.photoUrl,
+                firebaseIdToken = activeUser.firebaseIdToken,
+            ),
+        )
+
+        return syncRegistrationFromBackend(
+            user = activeUser,
+            gmailOverride = normalizedEmail,
+        )
+    }
+
     suspend fun refreshRegistrationFromBackend(): UserProfile? {
         ensureInitialized()
         val user = session.value.user ?: return null
+        return syncRegistrationFromBackend(user)
+    }
+
+    private suspend fun syncRegistrationFromBackend(
+        user: AuthenticatedUser,
+        gmailOverride: String? = null,
+    ): UserProfile {
         val previousUid = getLegacyInstallationUid()
+        val resolvedGmail = gmailOverride?.trim().takeIf { it?.isNotBlank() == true } ?: user.gmail
 
         val currentUser = TicBackendHttpClient.getCurrentUser(
             uid = user.uid,
-            gmail = user.gmail,
+            gmail = resolvedGmail,
             previousUid = previousUid,
         )
         val remoteProfile = currentUser.profile
@@ -234,7 +269,7 @@ object InMemorySessionStore {
         val currentDraft = registrationDraftDao.getByUid(user.uid)?.toLocalDraft()
         val mergedDraft = LocalRegistrationDraft(
             uid = user.uid,
-            gmail = remoteProfile.gmail.ifBlank { user.gmail },
+            gmail = remoteProfile.gmail.ifBlank { resolvedGmail.ifBlank { user.gmail } },
             displayName = remoteProfile.displayName.ifBlank { user.displayName },
             nik = remoteProfile.nik ?: currentDraft?.nik.orEmpty(),
             nama = remoteProfile.nama ?: currentDraft?.nama.orEmpty(),
@@ -262,7 +297,7 @@ object InMemorySessionStore {
             SessionEntity(
                 isAuthenticated = true,
                 uid = user.uid,
-                gmail = remoteProfile.gmail.ifBlank { user.gmail },
+                gmail = remoteProfile.gmail.ifBlank { resolvedGmail.ifBlank { user.gmail } },
                 displayName = remoteProfile.displayName.ifBlank { user.displayName },
                 photoUrl = user.photoUrl,
                 firebaseIdToken = user.firebaseIdToken,

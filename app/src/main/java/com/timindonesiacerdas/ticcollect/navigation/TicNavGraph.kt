@@ -8,6 +8,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.timindonesiacerdas.ticcollect.auth.AuthViewModel
+import com.timindonesiacerdas.ticcollect.auth.LoginScreen
 import com.timindonesiacerdas.ticcollect.auth.WelcomeScreen
 import com.timindonesiacerdas.ticcollect.camera.KtpCameraScreen
 import com.timindonesiacerdas.ticcollect.camera.SelfieCameraScreen
@@ -72,6 +73,25 @@ fun TicNavGraph(
                 onRegistrationClick = {
                     navController.navigate(TicRoutes.Registration)
                 },
+                onLoginClick = {
+                    navController.navigate(TicRoutes.Login)
+                },
+            )
+        }
+
+        composable(TicRoutes.Login) {
+            LoginScreen(
+                uiState = authUiState,
+                onBack = { navController.popBackStack() },
+                onEmailChanged = authViewModel::onLoginEmailChanged,
+                onLoginClick = authViewModel::loginWithEmail,
+                onRegistrationClick = {
+                    navController.navigate(TicRoutes.Registration)
+                },
+                onLoginResolved = { destination ->
+                    navController.navigateClearingBackStack(destination)
+                },
+                onLoginResolvedHandled = authViewModel::onLoginNavigationHandled,
             )
         }
 

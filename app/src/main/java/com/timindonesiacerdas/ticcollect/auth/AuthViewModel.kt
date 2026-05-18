@@ -1,11 +1,13 @@
 package com.timindonesiacerdas.ticcollect.auth
 
+import android.util.Patterns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.timindonesiacerdas.ticcollect.data.local.InMemorySessionStore
 import com.timindonesiacerdas.ticcollect.data.model.RegistrationStatus
 import com.timindonesiacerdas.ticcollect.data.model.SessionState
 import com.timindonesiacerdas.ticcollect.data.model.isApprovedAccess
+import com.timindonesiacerdas.ticcollect.data.remote.TicBackendNotFoundException
 import com.timindonesiacerdas.ticcollect.navigation.TicRoutes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -19,10 +21,22 @@ import kotlinx.coroutines.launch
 data class AuthUiState(
     val session: SessionState = SessionState(),
     val isBootstrapping: Boolean = true,
+    val loginEmail: String = "",
+    val isLoggingIn: Boolean = false,
+    val loginErrorMessage: String? = null,
+    val loginResolvedDestination: String? = null,
+)
+
+private data class LoginFormState(
+    val email: String = "",
+    val isLoggingIn: Boolean = false,
+    val errorMessage: String? = null,
+    val resolvedDestination: String? = null,
 )
 
 class AuthViewModel : ViewModel() {
     private val isBootstrappingFlow = MutableStateFlow(true)
+    private val loginFormState = MutableStateFlow(LoginFormState())
 
     init {
         InMemorySessionStore.ensureLocalIdentity()
@@ -37,10 +51,15 @@ class AuthViewModel : ViewModel() {
     val uiState: StateFlow<AuthUiState> = combine(
         InMemorySessionStore.session,
         isBootstrappingFlow.asStateFlow(),
-    ) { session, isBootstrapping ->
+        loginFormState.asStateFlow(),
+    ) { session, isBootstrapping, loginState ->
         AuthUiState(
             session = session,
             isBootstrapping = isBootstrapping,
+            loginEmail = loginState.email.ifBlank { session.user?.gmail.orEmpty() },
+            isLoggingIn = loginState.isLoggingIn,
+            loginErrorMessage = loginState.errorMessage,
+            loginResolvedDestination = loginState.resolvedDestination,
         )
     }
         .map { state ->
@@ -57,6 +76,7 @@ class AuthViewModel : ViewModel() {
 
     fun logout() {
         InMemorySessionStore.logout()
+        loginFormState.value = LoginFormState()
     }
 
     fun refreshAccessStatus() {
@@ -65,6 +85,64 @@ class AuthViewModel : ViewModel() {
                 InMemorySessionStore.refreshRegistrationFromBackend()
             }
         }
+    }
+
+    fun onLoginEmailChanged(value: String) {
+        loginFormState.value = loginFormState.value.copy(
+            email = value,
+            errorMessage = null,
+            resolvedDestination = null,
+        )
+    }
+
+    fun loginWithEmail() {
+        val email = loginFormState.value.email.trim()
+        if (email.isBlank()) {
+            loginFormState.value = loginFormState.value.copy(
+                errorMessage = "Email wajib diisi.",
+            )
+            return
+        }
+        if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            loginFormState.value = loginFormState.value.copy(
+                errorMessage = "Format email belum valid.",
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            loginFormState.value = loginFormState.value.copy(
+                email = email,
+                isLoggingIn = true,
+                errorMessage = null,
+                resolvedDestination = null,
+            )
+
+            runCatching {
+                InMemorySessionStore.restoreRegistrationByEmail(email)
+            }.onSuccess {
+                loginFormState.value = loginFormState.value.copy(
+                    isLoggingIn = false,
+                    resolvedDestination = destinationFor(InMemorySessionStore.session.value),
+                )
+            }.onFailure { error ->
+                val message = when (error) {
+                    is TicBackendNotFoundException ->
+                        "Email ini belum ditemukan di server. Gunakan Register jika ingin membuat registrasi baru."
+                    else -> error.message ?: "Login belum berhasil. Coba lagi."
+                }
+                loginFormState.value = loginFormState.value.copy(
+                    isLoggingIn = false,
+                    errorMessage = message,
+                )
+            }
+        }
+    }
+
+    fun onLoginNavigationHandled() {
+        loginFormState.value = loginFormState.value.copy(
+            resolvedDestination = null,
+        )
     }
 
     companion object {
